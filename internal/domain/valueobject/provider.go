@@ -39,10 +39,12 @@ func NewProvider(name, model, endpoint string) (*Provider, error) {
 	}, nil
 }
 
-// Equals compares two Provider values for equality.
 func (p *Provider) Equals(other *Provider) bool {
-	if p == nil || other == nil {
-		return p == other
+	if p == nil {
+		return other == nil
+	}
+	if other == nil {
+		return false
 	}
 	return p.Name == other.Name &&
 		p.Model == other.Model &&
@@ -51,6 +53,9 @@ func (p *Provider) Equals(other *Provider) bool {
 
 // String returns a string representation of the provider.
 func (p *Provider) String() string {
+	if p == nil {
+		return ""
+	}
 	return p.Name + "/" + p.Model
 }
 
