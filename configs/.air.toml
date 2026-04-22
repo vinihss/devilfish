@@ -1,0 +1,36 @@
+# .air.toml
+# Air configuration for hot-reload development
+
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+
+[build]
+args_bin = ["run", "devilfishd"]
+bin = "./tmp/devilfishd"
+cmd = "go build -o ./tmp/devilfishd ./cmd/devilfishd"
+delay = 1000
+exclude_dir = ["assets", "tmp", "vendor", "testdata", ".git"]
+exclude_file = ["*.toml", "*.yaml"]
+include_ext = ["go", "yaml", "toml", "yml", "json"]
+log = "tmp/air.log"
+poll = false
+rerun = false
+watch = ["."]
+watch_exts = ["go", "yaml", "toml", "yml"]
+
+[color]
+app = "cyan"
+build = "yellow"
+build_error = "red"
+main = "cyan"
+runner = "green"
+watcher = "magenta"
+
+[misc]
+clean_on_reload = true
+log_time = false
+
+[screen]
+clear_on_reload = true
+keep_scroll = true

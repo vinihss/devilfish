@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "create-agentsmd",
+  "owner": "atc-net",
+  "repo": "atc-agentic-toolkit",
+  "path": "plugins/common/skills/create-agentsmd",
+  "branch": "main",
+  "sha": "290ab8ae85ba8695e9bceb674e74177e76f8633d",
+  "source": "manual"
+}

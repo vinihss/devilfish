@@ -1,0 +1,56 @@
+# Spanish Translations
+
+# AI Response Messages
+ai.welcome = "Hola! Soy tu asistente de IA. Como puedo ayudarte hoy?"
+ai.thinking = "Deja que lo piense..."
+ai.error = "Lo siento, encontre un error al procesar tu solicitud."
+ai.timeout = "La solicitud expiro. Por favor, intenta de nuevo."
+ai.rate_limit = "Demasiadas solicitudes. Por favor, espera un momento e intenta de nuevo."
+ai.provider_unavailable = "El servicio de IA no esta disponible actualmente. Por favor, intenta mas tarde."
+ai.invalid_request = "Solicitud invalida. Por favor, verifica tu entrada."
+ai.empty_message = "Por favor, proporciona un mensaje para responder."
+ai.stream_start = "Iniciando respuesta..."
+ai.stream_end = "[Fin de la respuesta]"
+
+# Telegram Specific Messages
+telegram.start = "Hola! Estoy listo para ayudar. Enviame un mensaje para comenzar."
+telegram.help = "Enviame cualquier mensaje y usare IA para responder. Usa /clear para iniciar una nueva conversacion."
+telegram.clear = "Conversacion borrada. Comenzando de nuevo!"
+telegram.unknown_command = "Comando desconocido. Usa /help para ver los comandos disponibles."
+telegram.not_text = "Solo puedo procesar mensajes de texto. Por favor, envia texto."
+telegram.media_not_supported = "Los mensajes multimedia aun no son compatibles. Por favor, envia texto."
+telegram.typing = "IA esta pensando..."
+telegram.bot_description = "Asistente de IA potenciado por gateway WebSocket"
+telegram.private_only = "Este bot solo funciona en chats privados. Inicia una conversacion!"
+
+# Discord Specific Messages
+discord.start = "Hola! Soy tu asistente de IA. Mencioname en tu mensaje para charlar."
+discord.help = "Mencioname (@bot) en tu mensaje para charlar. Respondere a tus mensajes."
+discord.mention_required = "Por favor, mencioname en tu mensaje para activar el bot."
+discord.clear = "Conversacion borrada para este canal!"
+discord.dm_welcome = "Hola! Esta es una conversacion privada con el asistente de IA."
+discord.embed_title = "Respuesta de IA"
+discord.embed_footer = "Powered by DevilFish"
+discord.unknown_command = "Comando desconocido. Usa /help para ver los comandos disponibles."
+
+# Slack Specific Messages
+slack.start = "Hola! Soy tu asistente de IA. Mencioname (@bot) o responde a mis mensajes para charlar."
+slack.help = "Mencioname (@bot) en tu mensaje o responde para iniciar una conversacion."
+slack.mention_required = "Por favor, mencioname en tu mensaje para activar el bot."
+slack.clear = "Conversacion borrada en este canal!"
+slack.unknown_command = "Comando desconocido. Usa /help para ver los comandos disponibles."
+slack.app_mention = "Nuevo mensaje del Asistente de IA"
+
+# Error Messages
+error.general = "Ocurrio un error. Por favor, intenta de nuevo."
+error.not_found = "Recurso no encontrado."
+error.unauthorized = "No autorizado. Por favor, autentificate."
+error.forbidden = "Acceso denegado."
+error.invalid_input = "Entrada invalida proporcionada."
+error.internal = "Error interno del servidor."
+error.service_unavailable = "Servicio temporalmente no disponible."
+error.connection_failed = "Error de conexion. Por favor, verifica tu red."
+error.parse_failed = "Error al analizar la solicitud."
+error.validation_failed = "Validacion fallida."
+error.session_not_found = "Sesion no encontrada. Iniciando nueva conversacion."
+error.session_expired = "Sesion expirada. Iniciando nueva conversacion."

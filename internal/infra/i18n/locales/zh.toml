@@ -1,0 +1,56 @@
+# Chinese (Simplified) Translations
+
+# AI Response Messages
+ai.welcome = "你好！我是你的AI助手。今天我可以帮助你什么？"
+ai.thinking = "让我想一想..."
+ai.error = "抱歉，我在处理您的请求时遇到错误。"
+ai.timeout = "请求已超时。请重试。"
+ai.rate_limit = "请求过多。请稍等片刻后重试。"
+ai.provider_unavailable = "AI服务目前不可用。请稍后再试。"
+ai.invalid_request = "请求无效。请检查您的输入。"
+ai.empty_message = "请提供一条消息让我回复。"
+ai.stream_start = "开始生成回复..."
+ai.stream_end = "[回复结束]"
+
+# Telegram Specific Messages
+telegram.start = "你好！我已准备好帮助。请发送消息开始。"
+telegram.help = "发送任何消息，我会用AI回复。使用 /clear 开始新对话。"
+telegram.clear = "对话已清除，重新开始！"
+telegram.unknown_command = "未知命令。使用 /help 查看可用命令。"
+telegram.not_text = "我只能处理文字消息。请发送文字。"
+telegram.media_not_supported = "媒体消息暂不支持。请发送文字。"
+telegram.typing = "AI正在思考..."
+telegram.bot_description = "使用WebSocket网关的AI助手机器人"
+telegram.private_only = "此机器人仅在私聊中工作。请开始私聊！"
+
+# Discord Specific Messages
+discord.start = "你好！我是你的AI助手。在消息中提及我就可以聊天。"
+discord.help = "在消息中提及我（@bot）来聊天。我会回复您的消息。"
+discord.mention_required = "请在消息中提及我以激活机器人。"
+discord.clear = "此频道的对话已清除！"
+discord.dm_welcome = "你好！这是与AI助手的私人对话。"
+discord.embed_title = "AI回复"
+discord.embed_footer = "Powered by DevilFish"
+discord.unknown_command = "未知命令。使用 /help 查看可用命令。"
+
+# Slack Specific Messages
+slack.start = "你好！我是你的AI助手。提及我（@bot）或回复我的消息来聊天。"
+slack.help = "在消息中提及我（@bot）或回复以开始对话。"
+slack.mention_required = "请在消息中提及我以激活机器人。"
+slack.clear = "此频道的对话已清除！"
+slack.unknown_command = "未知命令。使用 /help 查看可用命令。"
+slack.app_mention = "AI助手的新消息"
+
+# Error Messages
+error.general = "发生错误。请重试。"
+error.not_found = "未找到资源。"
+error.unauthorized = "未授权。请进行身份验证。"
+error.forbidden = "访问被拒绝。"
+error.invalid_input = "提供输入无效。"
+error.internal = "服务器内部错误。"
+error.service_unavailable = "服务暂时不可用。"
+error.connection_failed = "连接失败。请检查您的网络。"
+error.parse_failed = "解析请求失败。"
+error.validation_failed = "验证失败。"
+error.session_not_found = "未找到会话。开始新对话。"
+error.session_expired = "会话已过期。开始新对话。"

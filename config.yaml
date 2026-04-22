@@ -1,0 +1,88 @@
+# DevilFish Configuration
+# Copy this to config.yaml and fill in your API keys
+
+server:
+  host: "0.0.0.0"
+  port: 8082
+  ws_port: 8083
+  read_timeout: 30
+  write_timeout: 30
+
+# AI Provider Configuration
+ai:
+  providers:
+    - name: "openai"
+      enabled: true
+      api_key: ${OPENAI_API_KEY}
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-4o"
+
+    - name: "groq"
+      enabled: true
+      api_key: ${GROQ_API_KEY}
+      base_url: "https://api.groq.com/openai/v1"
+      model: "llama-3.1-8b-instant"
+
+    - name: "gemini"
+      enabled: false
+      api_key: ${GEMINI_API_KEY}
+      base_url: "https://generativelanguage.googleapis.com/v1"
+      model: "gemini-2.0-flash"
+
+    - name: "ollama"
+      enabled: false
+      base_url: "http://localhost:11434"
+      model: "llama3.2"
+
+  default_provider: "groq"
+  timeout: 30
+  max_retries: 3
+
+# Messaging Channel Configuration
+messaging:
+  telegram:
+    enabled: true
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    allow_list: []
+
+  discord:
+    enabled: false
+    bot_token: ${DISCORD_BOT_TOKEN}
+    allow_list: []
+
+  slack:
+    enabled: false
+    bot_token: ${SLACK_BOT_TOKEN}
+    app_token: ${SLACK_APP_TOKEN}
+    allow_list: []
+
+# Internationalization
+i18n:
+  default_locale: "en"
+  supported_locales:
+    - "en"
+    - "pt"
+    - "es"
+  fallback_locale: "en"
+
+# Logging
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+# Security
+security:
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst: 10
+
+# WebSocket Configuration
+websocket:
+  server:
+    host: "0.0.0.0"
+    port: 8081
+  auth:
+    enabled: false
+    jwt_secret: ${JWT_SECRET:-devilfish-dev-secret-change-in-production}

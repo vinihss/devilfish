@@ -1,0 +1,65 @@
+# docker-compose.yaml
+# Docker Compose configuration for DevilFish
+
+version: '3.8'
+
+services:
+  devilfishd:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dev
+    container_name: devilfishd
+    volumes:
+      - ..:/app
+      - /app/tmp
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-devilfish-dev-secret-change-in-production}
+    env_file:
+      - ../.env
+    restart: unless-stopped
+    networks:
+      - devilfish
+
+  # Optional: Redis for session storage
+  redis:
+    image: redis:7-alpine
+    container_name: devilfish-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - devilfish
+
+  # Optional: Ollama for local AI
+  ollama:
+    image: ollama/ollama:latest
+    container_name: devilfish-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - devilfish
+
+networks:
+  devilfish:
+    driver: bridge
+
+volumes:
+  redis_data:
+  ollama_data:

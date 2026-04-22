@@ -1,0 +1,56 @@
+# English Translations
+
+# AI Response Messages
+ai.welcome = "Hello! I'm your AI assistant. How can I help you today?"
+ai.thinking = "Let me think about that..."
+ai.error = "Sorry, I encountered an error while processing your request."
+ai.timeout = "The request timed out. Please try again."
+ai.rate_limit = "Too many requests. Please wait a moment and try again."
+ai.provider_unavailable = "AI service is currently unavailable. Please try again later."
+ai.invalid_request = "Invalid request. Please check your input."
+ai.empty_message = "Please provide a message for me to respond to."
+ai.stream_start = "Starting response..."
+ai.stream_end = "[End of response]"
+
+# Telegram Specific Messages
+telegram.start = "Welcome! I'm ready to help. Send me a message to get started."
+telegram.help = "Send me any message and I'll use AI to respond. Use /clear to start a new conversation."
+telegram.clear = "Conversation cleared. Starting fresh!"
+telegram.unknown_command = "Unknown command. Use /help for available commands."
+telegram.not_text = "I can only process text messages. Please send text."
+telegram.media_not_supported = "Media messages are not yet supported. Please send text."
+telegram.typing = "ai is thinking..."
+telegram.bot_description = "AI-powered assistant bot using WebSocket gateway"
+telegram.private_only = "This bot only works in private chats. Start a conversation!"
+
+# Discord Specific Messages
+discord.start = "Hello! I'm your AI assistant. Mention me in your message to chat."
+discord.help = "Mention me (@bot) in your message to chat. I'll respond to your messages."
+discord.mention_required = "Please mention me in your message to activate the bot."
+discord.clear = "Conversation cleared for this channel!"
+discord.dm_welcome = "Hello! This is a private conversation with the AI assistant."
+discord.embed_title = "AI Response"
+discord.embed_footer = "Powered by DevilFish"
+discord.unknown_command = "Unknown command. Use /help for available commands."
+
+# Slack Specific Messages
+slack.start = "Hello! I'm your AI assistant. Mention me (@bot) or reply to my messages to chat."
+slack.help = "Mention me (@bot) in your message or reply to start a conversation."
+slack.mention_required = "Please mention me in your message to activate the bot."
+slack.clear = "Conversation cleared in this channel!"
+slack.unknown_command = "Unknown command. Use /help for available commands."
+slack.app_mention = "New message from AI Assistant"
+
+# Error Messages
+error.general = "An error occurred. Please try again."
+error.not_found = "Resource not found."
+error.unauthorized = "Unauthorized. Please authenticate."
+error.forbidden = "Access denied."
+error.invalid_input = "Invalid input provided."
+error.internal = "Internal server error."
+error.service_unavailable = "Service temporarily unavailable."
+error.connection_failed = "Connection failed. Please check your network."
+error.parse_failed = "Failed to parse request."
+error.validation_failed = "Validation failed."
+error.session_not_found = "Session not found. Starting new conversation."
+error.session_expired = "Session expired. Starting new conversation."
