@@ -1,0 +1,31 @@
+# Binaries
+bin/
+devilfishd
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+
+# IDE
+.vscode/
+.idea/
+
+# Build output
+tmp/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env*
+
+# Logs
+*.log
+
+# Test coverage
+coverage.out
+coverage.html
