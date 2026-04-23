@@ -10,6 +10,7 @@ DevilFish é um servidor em Go que atua como ponte entre múltiplos canais de me
 
 - **Multi-canal**: Telegram, Discord, Slack
 - **Multi-provider**: OpenAI, Groq, Gemini, Ollama
+- **MCP Servers**: Filesystem, GitHub, Memory (extensible)
 - **Gateway WebSocket**: Integração em tempo real
 - **Arquitetura modular**: Hexagonal Architecture (Ports & Adapters)
 - **Docker-ready**: Pronto para produção com multi-stage build
@@ -17,6 +18,43 @@ DevilFish é um servidor em Go que atua como ponte entre múltiplos canais de me
 
 ## Arquitetura
 
+```
+┌─────────────────────────────────────────────────────────┐
+│                      ADAPTERS                          │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │Telegram │  │Discord  │  │ Slack   │  │   WS    │  │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  │
+└───────┼────────────┼────────────┼────────────┼─────────┘
+        │           │           │            │
+        ▼           ▼           ▼            ▼
+┌─────────────────────────────────────────────────────────┐
+│                       PORTS                            │
+│  ┌──────────────┐  ┌────────────┐  ┌────────────────┐  │
+│  │ MessagePort │  │AIProvider │  │  WebSocket     │  │
+│  └─────┬──────┘  └────┬─────┘  └───────┬────────┘  │
+│  ┌─────────────┐                                            │
+│  │ MCPClient  │                                            │
+│  └─────┬─────┘                                            │
+└───────┼───────────────┼──────────────────┼──────────┘
+        │              │                  │
+        ▼              ▼                  ▼
+┌─────────────────────────────────────────────────────────┐
+│                      DOMAIN                            │
+│  ┌──────────────┐  ┌────────────┐  ┌──────────────┐  │
+│  │  Message   │  │ Session  │  │  Router   │  │
+│  └──────────────┘  └──────────┘  └───────────┘  │
+│  ┌──────────────┐  ┌────────────┐                    │
+│  │  MCPServer │  │  Tool    │                    │
+│  └──────────────┘  └────────────┘                    │
+└─────────────────────────────────────────────────────────┘
+        │              │                  │
+        ▼              ▼                  ▼
+┌─────────────────────────────────────────────────────────┐
+│                   APPLICATION                          │
+│  ┌────────────────┐  ┌────────────┐  ┌───────────┐  │
+│  │HandleMessage   │  │ ChatWithAI│  │ManageSess│  │
+│  └────────────────┘  └─��────────┘  └──────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      ADAPTERS                          │
@@ -129,6 +167,102 @@ websocket:
 | `DISCORD_BOT_TOKEN` | Token do bot do Discord |
 | `JWT_SECRET` | Segredo para JWT (WebSocket auth) |
 
+## MCP Server Connection
+
+O DevilFish suporta conexão com servidores MCP (Model Context Protocol) para estender suas capacidades com ferramentas externas.
+
+### Servidores Suportados
+
+| Servidor | Transport | Ferramentas |
+|----------|----------|------------|
+| `filesystem` | stdio | read_file, write_file, list_directory, create_directory, etc. |
+| `github` | http | get_file, create_issue, search_repositories, etc. |
+| `memory` | stdio | memory_read, memory_write, memory_delete, memory_search |
+
+### Configuração
+
+Adicione servidores MCP na seção `mcp.servers` do config.yaml:
+
+```yaml
+mcp:
+  servers:
+    - name: "filesystem"
+      enabled: true
+      transport: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+        - "/tmp"
+      timeout: 30
+      max_retries: 3
+
+    - name: "github"
+      enabled: true
+      transport: "http"
+      url: "http://localhost:3000"
+      auth_token: ${MCP_GITHUB_TOKEN}
+      timeout: 30
+      max_retries: 3
+
+    - name: "memory"
+      enabled: true
+      transport: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-memory"
+      timeout: 30
+      max_retries: 3
+```
+
+### Instalação de Pré-requisitos
+
+Para servidores stdio, instale os pacotes Node.js:
+
+```bash
+# Filesystem server
+npm install -g @modelcontextprotocol/server-filesystem
+
+# Memory server
+npm install -g @modelcontextprotocol/server-memory
+```
+
+### Variáveis de ambiente
+
+| Variável | Descrição |
+|----------|----------|
+| `MCP_GITHUB_TOKEN` | Token de acesso GitHub (para servidor github) |
+
+### Uso Programático
+
+```go
+import (
+    "devilfish/internal/adapters/mcp"
+    "devilfish/internal/ports/outbound"
+)
+
+// Criar pool de conexões
+pool := mcp.NewPool()
+
+// Adicionar servidor
+config := outbound.MCPServerConfig{
+    Name:      "filesystem",
+    Transport: "stdio",
+    Command:  "npx",
+    Args:     []string{"-y", "@modelcontextprotocol/server-filesystem", "/tmp"},
+}
+client, err := pool.Add(context.Background(), config)
+
+// Listar ferramentas
+tools, err := client.ListTools(context.Background())
+
+// Executar ferramenta
+result, err := client.ExecuteTool(context.Background(), "read_file", map[string]interface{}{
+    "path": "/tmp file.txt",
+})
+```
+
 ## API
 
 ### WebSocket
@@ -188,14 +322,23 @@ Isso inicia o container com hot-reload via Air. Mudanças em arquivos Go são re
 devilfish/
 ├── cmd/                    # Entry points
 ├── internal/
-│   ├── domain/            # Entidades e value objects
-│   ├── application/      # Casos de uso
-│   ├── ports/           # Interfaces
-│   ├── adapters/        # Implementações concretas
-│   └── infra/          # Config, logging, i18n
+│   ├── domain/
+│   │   ├── entity/        # Message, Session, User, MCPServer, Tool
+│   │   └── valueobject/   # Provider, MessageContent, MCPConnection
+│   ├── application/       # Casos de uso
+│   ├── ports/
+│   │   ├── inbound/      # Interfaces de entrada
+│   │   └── outbound/    # AIProvider, MCPClient, SessionStore
+│   ├── adapters/
+│   │   ├── ai/         # OpenAI, Groq, Gemini, Ollama
+│   │   ├── messaging/   # Telegram, Discord, Slack
+│   │   ├── mcp/        # MCP client, transports, pool, registry
+│   │   ├── websocket/  # WebSocket gateway
+│   │   └── storage/   # Session store
+│   └── infra/          # Config, logging, i18n, security
 ├── pkg/                  # Pacotes reutilizáveis
 ├── configs/              # Arquivos de configuração
-└── tests/               # Testes
+└── tests/               # Testes unitários
 ```
 
 ## Internacionalização
