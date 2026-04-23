@@ -26,13 +26,16 @@ devilfish/
 ├── internal/
 │   ├── domain/
 │   │   ├── entity/             # Entidades do domínio
-│   │   │   ├── message.go
-│   │   │   ├── session.go
-│   │   │   ├── user.go
-│   │   │   └── config.go
+│   │   ├── message.go
+│   │   ├── session.go
+│   │   ├── user.go
+│   │   ├── config.go
+│   │   ├── mcp_server.go       # Servidor MCP
+│   │   └── tool.go            # Ferramenta MCP
 │   │   └── valueobject/       # Value Objects
 │   │       ├── messagecontent.go
-│   │       └── provider.go
+│   │       ├── provider.go
+│   │       └── mcp_connection.go # Conexão MCP
 │   ├── application/
 │   │   ├── usecase/          # Casos de uso
 │   │   │   ├── handle_message.go
@@ -70,6 +73,13 @@ devilfish/
 │   │   │   │   └── provider.go
 │   │   │   └── ollama/
 │   │   │       └── provider.go
+│   │   ├── mcp/              # Adaptadores MCP
+│   │   │   ├── client.go          # Cliente MCP principal
+│   │   │   ├── pool.go            # Pool de conexões
+│   │   │   ├── registry.go        # Registro de servidores
+│   │   │   ├── stdio_transport.go # Transport stdio
+│   │   │   ├── http_transport.go  # Transport HTTP/SSE
+│   │   │   └── tool_discovery.go  # Descoberta de ferramentas
 │   │   ├── websocket/
 │   │   │   └── gateway.go
 │   │   └── storage/
@@ -757,6 +767,49 @@ Antes de considerar uma tarefa completa:
 - [ ] Código segue regras de estilo
 - [ ] Documentação atualizada
 - [ ] AGENTS.md atualizado (se necessário)
+
+---
+
+## Regras de Documentação
+
+### Documentação Obrigatória
+
+Toda feature implementada DEVE incluir atualização de documentação:
+
+| Artefato | O que atualizar |
+|----------|----------------|
+| **README.md** | Funcionalidades, configuração, exemplos, variáveis de ambiente |
+| **AGENTS.md** | Estrutura de diretórios, padrões, componentes |
+| **SPEC file** | Status → "Implemented", data de implementação |
+
+### Checklist de Documentação
+
+Após implementação, verificar:
+
+- [ ] README.md atualizado com a nova feature
+- [ ] Seção "Funcionalidades" lista a nueva capability
+- [ ] Configuração documentada (se aplicável)
+- [ ] Exemplos de uso (se aplicável)
+- [ ] Variáveis de ambiente listadas
+- [ ] AGENTS.md atualizado (nova entidade, porta, adaptador)
+- [ ] SPEC.md com status "Implemented"
+
+### O que NÃO documentar
+
+- Detalhes de implementação (arquivos internos)
+- Decisões técnicas que pertencem ao SPEC/plan
+- Código de testes (eles se auto-documentam)
+
+### Padrão de Commits de Doc
+
+```
+docs: <descrição curta>
+```
+
+Exemplos:
+- `docs: add MCP server section to README`
+- `docs: update README with filesystem config`
+- `docs: add MCP to AGENTS.md structure`
 
 ---
 

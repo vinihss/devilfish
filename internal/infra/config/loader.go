@@ -324,7 +324,7 @@ func Load() (*Config, error) {
 
 	// If no file found, return default config
 	if lastErr == nil {
-		return DefaultConfig, nil
+		return DefaultConfig(), nil
 	}
 
 	return nil, lastErr

@@ -86,3 +86,44 @@ websocket:
   auth:
     enabled: false
     jwt_secret: ${JWT_SECRET:-devilfish-dev-secret-change-in-production}
+
+# MCP Server Configuration
+mcp:
+  servers:
+    # Filesystem Server - Access local files
+    # Tools: read_file, write_file, create_directory, list_directory, etc.
+    # Usage: npm install -g @modelcontextprotocol/server-filesystem
+    - name: "filesystem"
+      enabled: false
+      transport: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+        - "/tmp"
+      timeout: 30
+      max_retries: 3
+
+    # GitHub Server - Access GitHub API
+    # Tools: get_file, create_issue, search_repositories, etc.
+    # Requires: MCP_GITHUB_TOKEN environment variable
+    - name: "github"
+      enabled: false
+      transport: "http"
+      url: "http://localhost:3000"
+      auth_token: ${MCP_GITHUB_TOKEN:-}
+      timeout: 30
+      max_retries: 3
+
+    # Memory Server - Persistent memory storage
+    # Tools: memory_read, memory_write, memory_delete, memory_search
+    # Usage: npm install -g @modelcontextprotocol/server-memory
+    - name: "memory"
+      enabled: false
+      transport: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-memory"
+      timeout: 30
+      max_retries: 3
