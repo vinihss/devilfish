@@ -36,7 +36,7 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("using default config: %v", err))
-		cfg = config.DefaultConfig
+		cfg = config.DefaultConfig()
 	}
 
 	logger.Info(fmt.Sprintf("server on %s:%d", cfg.Server.Host, cfg.Server.Port))
@@ -149,8 +149,8 @@ func main() {
 		websocket.Config{
 			Host:        cfg.Server.Host,
 			Port:        cfg.Server.WSPort,
-			AuthEnabled: cfg.Websocket.Auth.Enabled,
-			JWTSecret:   cfg.Websocket.Auth.JWTSecret,
+			AuthEnabled: cfg.WebSocket.Auth.Enabled,
+			JWTSecret:   cfg.WebSocket.Auth.JWTSecret,
 		},
 	)
 	mux.HandleFunc("/ws", wsHandler.HandleHTTP)
