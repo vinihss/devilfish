@@ -30,10 +30,11 @@ type ServerConfig struct {
 
 // AIConfig holds AI provider settings
 type AIConfig struct {
-	Providers        []ProviderConfig `yaml:"providers"`
-	DefaultProvider string            `yaml:"default_provider"`
-	Timeout         int                `yaml:"timeout"`
-	MaxRetries      int                `yaml:"max_retries"`
+	Providers       []ProviderConfig `yaml:"providers"`
+	DefaultProvider string           `yaml:"default_provider"`
+	SystemPrompt    string           `yaml:"system_prompt"`
+	Timeout         int              `yaml:"timeout"`
+	MaxRetries      int              `yaml:"max_retries"`
 }
 
 // ProviderConfig holds individual provider settings
@@ -154,6 +155,7 @@ func DefaultConfig() *Config {
 				{Name: "ollama", Enabled: false, BaseURL: "http://localhost:11434", Model: "llama3.2"},
 			},
 			DefaultProvider: "groq",
+			SystemPrompt:    "Você é um assistente de conversação em português brasileiro. Responda sempre em pt-BR de forma clara, amigável e natural.",
 			Timeout:         30,
 			MaxRetries:      3,
 		},
