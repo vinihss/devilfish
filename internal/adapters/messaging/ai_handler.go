@@ -11,13 +11,20 @@ import (
 // AIHandlerAdapter wraps ChatWithAIUseCase to implement inbound.MessageHandler.
 // This allows chat interactions to work through the messaging adapter interface.
 type AIHandlerAdapter struct {
-	uc *usecase.ChatWithAIUseCase
+	uc           *usecase.ChatWithAIUseCase
+	systemPrompt string
 }
 
 // NewAIHandlerAdapter creates a new AIHandlerAdapter.
-func NewAIHandlerAdapter(uc *usecase.ChatWithAIUseCase) *AIHandlerAdapter {
+//
+// Parameters:
+//   - uc: The ChatWithAIUseCase to delegate chat requests to.
+//   - systemPrompt: The system-level instruction that defines the agent's persona,
+//     language, and behavior (e.g. "Você é um assistente em pt-BR...").
+func NewAIHandlerAdapter(uc *usecase.ChatWithAIUseCase, systemPrompt string) *AIHandlerAdapter {
 	return &AIHandlerAdapter{
-		uc: uc,
+		uc:           uc,
+		systemPrompt: systemPrompt,
 	}
 }
 
@@ -38,7 +45,7 @@ func (a *AIHandlerAdapter) Handle(ctx context.Context, msg *inbound.InboundMessa
 		UserID:       msg.UserID,
 		Provider:     providerName,
 		Model:        providerInfo.Model,
-		SystemPrompt: "You are a helpful AI assistant.",
+		SystemPrompt: a.systemPrompt,
 		Temperature:  0.7,
 		MaxTokens:    2048,
 	}

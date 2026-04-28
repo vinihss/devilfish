@@ -35,6 +35,7 @@ ai:
       model: "llama3.2"
 
   default_provider: "groq"
+  system_prompt: "Você é um assistente de conversação em português brasileiro. Responda sempre em pt-BR de forma clara, amigável e natural."
   timeout: 30
   max_retries: 3
 

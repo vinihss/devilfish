@@ -137,7 +137,7 @@ func main() {
 		}
 	}
 	chatWithAI := usecase.NewChatWithAIUseCase(defaultProvider, sessionStore, logger, translator, defaultModel)
-	messageHandler := messaging.NewAIHandlerAdapter(chatWithAI)
+	messageHandler := messaging.NewAIHandlerAdapter(chatWithAI, cfg.AI.SystemPrompt)
 
 	// Create HTTP server
 	mux := http.NewServeMux()
