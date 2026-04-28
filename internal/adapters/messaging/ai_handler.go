@@ -16,6 +16,11 @@ type AIHandlerAdapter struct {
 }
 
 // NewAIHandlerAdapter creates a new AIHandlerAdapter.
+//
+// Parameters:
+//   - uc: The ChatWithAIUseCase to delegate chat requests to.
+//   - systemPrompt: The system-level instruction that defines the agent's persona,
+//     language, and behavior (e.g. "Você é um assistente em pt-BR...").
 func NewAIHandlerAdapter(uc *usecase.ChatWithAIUseCase, systemPrompt string) *AIHandlerAdapter {
 	return &AIHandlerAdapter{
 		uc:           uc,

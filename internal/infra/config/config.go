@@ -32,9 +32,11 @@ type ServerConfig struct {
 type AIConfig struct {
 	Providers       []ProviderConfig `yaml:"providers"`
 	DefaultProvider string           `yaml:"default_provider"`
-	SystemPrompt    string           `yaml:"system_prompt"`
-	Timeout         int              `yaml:"timeout"`
-	MaxRetries      int              `yaml:"max_retries"`
+	// SystemPrompt is the system-level instruction sent to the AI on every request,
+	// defining the agent's persona, language, and behavior.
+	SystemPrompt string `yaml:"system_prompt"`
+	Timeout      int    `yaml:"timeout"`
+	MaxRetries   int    `yaml:"max_retries"`
 }
 
 // ProviderConfig holds individual provider settings
