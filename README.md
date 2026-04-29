@@ -18,73 +18,63 @@ DevilFish é um servidor em Go que atua como ponte entre múltiplos canais de me
 
 ## Arquitetura
 
+DevilFish é composto por dois runtimes independentes que se comunicam via HTTP:
+
+```
+┌──────────────────────────────────┐      HTTP POST       ┌─────────────────────────────────────┐
+│       messagingd                 │  /api/message ──────► │           devilfishd (core)         │
+│  (messaging runtime)             │ ◄────────────         │  (AI + WebSocket + MCP)             │
+│                                  │                       │                                     │
+│  ┌─────────┐ ┌─────────┐        │                       │  ┌──────────┐  ┌────────────────┐  │
+│  │Telegram │ │Discord  │        │                       │  │ ChatWithAI│  │ WebSocket GW  │  │
+│  └────┬────┘ └────┬────┘        │                       │  └────┬─────┘  └───────┬────────┘  │
+│  ┌─────────┐      │             │                       │       │               │             │
+│  │ Slack   │      │             │                       │  ┌────┴──────────────┴────────┐    │
+│  └────┬────┘      │             │                       │  │   inbound.MessageHandler   │    │
+│       │           │             │                       │  └────────────────────────────┘    │
+│  ┌────▼───────────▼────────┐   │                       │                                     │
+│  │  GatewayClient          │   │                       │  ┌──────────────┐ ┌──────────────┐ │
+│  │ (MessageHandler via HTTP)│  │                       │  │  OpenAI/Groq │ │  MCP Servers │ │
+│  └─────────────────────────┘  │                       │  └──────────────┘ └──────────────┘ │
+└──────────────────────────────────┘                       └─────────────────────────────────────┘
+```
+
+### Runtimes
+
+| Runtime | Binário | Porta padrão | Responsabilidade |
+|---------|---------|-------------|-----------------|
+| Core | `devilfishd` | 8082 (HTTP) / 8083 (WS) | IA, sessões, WebSocket, endpoint `/api/message` |
+| Messaging | `messagingd` | 8084 (HTTP) | Webhooks Telegram/Discord/Slack |
+
+Os adaptadores de mensageria nunca têm dependência direta de provedores de IA — eles só conhecem a interface `inbound.MessageHandler`, implementada pelo `GatewayClient`.
+
+### Arquitetura interna (Hexagonal)
+
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      ADAPTERS                          │
+│                      ADAPTERS                           │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
 │  │Telegram │  │Discord  │  │ Slack   │  │   WS    │  │
 │  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  │
 └───────┼────────────┼────────────┼────────────┼─────────┘
-        │           │           │            │
-        ▼           ▼           ▼            ▼
+        │            │            │             │
+        ▼            ▼            ▼             ▼
 ┌─────────────────────────────────────────────────────────┐
-│                       PORTS                            │
+│                       PORTS                             │
 │  ┌──────────────┐  ┌────────────┐  ┌────────────────┐  │
-│  │ MessagePort │  │AIProvider │  │  WebSocket     │  │
-│  └─────┬──────┘  └────┬─────┘  └───────┬────────┘  │
-│  ┌─────────────┐                                            │
-│  │ MCPClient  │                                            │
-│  └─────┬─────┘                                            │
-└───────┼───────────────┼──────────────────┼──────────┘
-        │              │                  │
-        ▼              ▼                  ▼
-┌─────────────────────────────────────────────────────────┐
-│                      DOMAIN                            │
-│  ┌──────────────┐  ┌────────────┐  ┌──────────────┐  │
-│  │  Message   │  │ Session  │  │  Router   │  │
-│  └──────────────┘  └──────────┘  └───────────┘  │
-│  ┌──────────────┐  ┌────────────┐                    │
-│  │  MCPServer │  │  Tool    │                    │
-│  └──────────────┘  └────────────┘                    │
+│  │ MessagePort  │  │AIProvider  │  │  WebSocket     │  │
+│  └─────┬────────┘  └────┬──────┘  └───────┬────────┘  │
+│  ┌─────────────┐                                        │
+│  │  MCPClient  │                                        │
+│  └─────┬───────┘                                        │
 └─────────────────────────────────────────────────────────┘
-        │              │                  │
-        ▼              ▼                  ▼
+        │                │                  │
+        ▼                ▼                  ▼
 ┌─────────────────────────────────────────────────────────┐
-│                   APPLICATION                          │
-│  ┌────────────────┐  ┌────────────┐  ┌───────────┐  │
-│  │HandleMessage   │  │ ChatWithAI│  │ManageSess│  │
-│  └────────────────┘  └─��────────┘  └──────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-┌─────────────────────────────────────────────────────────┐
-│                      ADAPTERS                          │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
-│  │Telegram │  │Discord  │  │ Slack   │  │   WS    │  │
-│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  │
-└───────┼────────────┼────────────┼────────────┼─────────┘
-        │           │           │            │
-        ▼           ▼           ▼            ▼
-┌─────────────────────────────────────────────────────────┐
-│                       PORTS                            │
-│  ┌──────────────┐  ┌────────────┐  ┌────────────────┐  │
-│  │ MessagePort │  │AIProvider│  │  WebSocket     │  │
-│  └─────┬──────┘  └────┬─────┘  └───────┬────────┘  │
-└───────┼───────────────┼──────────────────┼──────────┘
-        │              │                  │
-        ▼              ▼                  ▼
-┌─────────────────────────────────────────────────────────┐
-│                      DOMAIN                            │
-│  ┌──────────────┐  ┌────────────┐  ┌──────────────┐  │
-│  │  Message   │  │ Session  │  │  Router   │  │
-│  └────────────┘  └──────────┘  └───────────┘  │
-└─────────────────────────────────────────────────────────┘
-        │              │                  │
-        ▼              ▼                  ▼
-┌─────────────────────────────────────────────────────────┐
-│                   APPLICATION                          │
-│  ┌────────────────┐  ┌────────────┐  ┌───────────┐  │
-│  │HandleMessage   │  │ ChatWithAI│  │ManageSess│  │
-│  └────────────────┘  └──────────┘  └──────────┘  │
+│                   APPLICATION                           │
+│  ┌────────────────┐  ┌────────────┐  ┌───────────────┐ │
+│  │HandleMessage   │  │ ChatWithAI │  │ ManageSession │ │
+│  └────────────────┘  └────────────┘  └───────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -110,10 +100,14 @@ cp configs/config.example.yaml configs/config.yaml
 # Edite config.yaml com suas credenciais
 ```
 
-### 3. Execute localmente
+### 3. Execute os dois runtimes
 
 ```bash
+# Terminal 1 — Core runtime (IA + WebSocket)
 make run
+
+# Terminal 2 — Messaging runtime (Telegram/Discord/Slack)
+make run-messaging
 ```
 
 ### 4. Ou com Docker
@@ -129,21 +123,29 @@ docker compose -f configs/docker-compose.yaml up --build
 ```yaml
 server:
   host: "0.0.0.0"
-  port: 8080
-  ws_port: 8081
+  port: 8082      # Core HTTP port (also serves /api/message)
+  ws_port: 8083   # WebSocket port
+
+# Gateway: messaging runtime uses this to reach the core
+gateway:
+  url: "http://localhost:8082"
+  api_key: ${GATEWAY_API_KEY:-}  # Optional shared secret
 
 ai:
   providers:
     - name: "openai"
-      model: "gpt-4-turbo-preview"
+      model: "gpt-4o"
       api_key: ${OPENAI_API_KEY}
       enabled: true
     - name: "groq"
-      model: "llama-3-70b"
+      model: "llama-3.1-8b-instant"
       api_key: ${GROQ_API_KEY}
       enabled: true
 
 messaging:
+  server:
+    host: "0.0.0.0"
+    port: 8084    # Messaging runtime HTTP port
   telegram:
     bot_token: ${TELEGRAM_BOT_TOKEN}
     enabled: true
@@ -157,15 +159,17 @@ websocket:
     jwt_secret: ${JWT_SECRET}
 ```
 
-### Variáveis de ambiente obrigatórias
+### Variáveis de ambiente
 
-| Variável | Descrição |
-|----------|----------|
-| `OPENAI_API_KEY` | Chave da API da OpenAI |
-| `GROQ_API_KEY` | Chave da API do Groq |
-| `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram |
-| `DISCORD_BOT_TOKEN` | Token do bot do Discord |
-| `JWT_SECRET` | Segredo para JWT (WebSocket auth) |
+| Variável | Runtime | Descrição |
+|----------|---------|-----------|
+| `OPENAI_API_KEY` | core | Chave da API da OpenAI |
+| `GROQ_API_KEY` | core | Chave da API do Groq |
+| `JWT_SECRET` | core | Segredo para JWT (WebSocket auth) |
+| `GATEWAY_API_KEY` | ambos | Shared secret entre os runtimes (opcional) |
+| `TELEGRAM_BOT_TOKEN` | messaging | Token do bot do Telegram |
+| `DISCORD_BOT_TOKEN` | messaging | Token do bot do Discord |
+| `SLACK_BOT_TOKEN` | messaging | Token do bot do Slack |
 
 ## MCP Server Connection
 
@@ -285,14 +289,18 @@ ws.onmessage = (event) => {
 };
 ```
 
-### REST (opcional)
+### REST
 
 ```
-GET  /health
-POST /api/v1/chat
-POST /api/v1/session
-GET  /api/v1/session/:id
-DELETE /api/v1/session/:id
+GET  /health            # Core runtime health check
+POST /api/message       # Internal: messaging runtime → core runtime
+GET  /ws                # WebSocket gateway
+
+# Messaging runtime
+GET  /health                 # Messaging runtime health check
+POST /webhooks/telegram      # Telegram webhook
+POST /webhooks/discord       # Discord webhook
+POST /webhooks/slack         # Slack webhook
 ```
 
 ## Desenvolvimento
@@ -300,12 +308,14 @@ DELETE /api/v1/session/:id
 ### Comandos do Makefile
 
 ```bash
-make build      # Build binário
-make run       # Executar localmente
-make test      # Rodar testes
-make lint      # Verificar lint
-make docker    # Build e run Docker
-make docker-dev # Docker com hot-reload
+make build           # Build core runtime (devilfishd)
+make build-messaging # Build messaging runtime (messagingd)
+make build-all       # Build both binaries
+make run             # Run core runtime locally
+make run-messaging   # Run messaging runtime locally
+make test            # Rodar testes
+make lint            # Verificar lint
+make docker-dev      # Docker com hot-reload
 ```
 
 ### Hot-Reload com Air
@@ -320,25 +330,29 @@ Isso inicia o container com hot-reload via Air. Mudanças em arquivos Go são re
 
 ```
 devilfish/
-├── cmd/                    # Entry points
+├── cmd/
+│   ├── devilfishd/            # Core runtime (IA + WebSocket + /api/message)
+│   ├── messagingd/            # Messaging runtime (Telegram/Discord/Slack)
+│   └── cli/                   # CLI management tool
 ├── internal/
 │   ├── domain/
-│   │   ├── entity/        # Message, Session, User, MCPServer, Tool
-│   │   └── valueobject/   # Provider, MessageContent, MCPConnection
-│   ├── application/       # Casos de uso
+│   │   ├── entity/            # Message, Session, User, MCPServer, Tool
+│   │   └── valueobject/       # Provider, MessageContent, MCPConnection
+│   ├── application/           # Casos de uso
 │   ├── ports/
-│   │   ├── inbound/      # Interfaces de entrada
-│   │   └── outbound/    # AIProvider, MCPClient, SessionStore
+│   │   ├── inbound/           # Interfaces de entrada (MessageHandler)
+│   │   └── outbound/          # AIProvider, MCPClient, SessionStore
 │   ├── adapters/
-│   │   ├── ai/         # OpenAI, Groq, Gemini, Ollama
-│   │   ├── messaging/   # Telegram, Discord, Slack
-│   │   ├── mcp/        # MCP client, transports, pool, registry
-│   │   ├── websocket/  # WebSocket gateway
-│   │   └── storage/   # Session store
-│   └── infra/          # Config, logging, i18n, security
-├── pkg/                  # Pacotes reutilizáveis
-├── configs/              # Arquivos de configuração
-└── tests/               # Testes unitários
+│   │   ├── ai/                # OpenAI, Groq, Gemini, Ollama
+│   │   ├── messaging/         # Telegram, Discord, Slack
+│   │   ├── gatewayclient/     # HTTP client → /api/message (used by messagingd)
+│   │   ├── mcp/               # MCP client, transports, pool, registry
+│   │   ├── websocket/         # WebSocket gateway
+│   │   └── storage/           # Session store
+│   └── infra/                 # Config, logging, i18n, security
+├── pkg/                       # Pacotes reutilizáveis
+├── configs/                   # Arquivos de configuração
+└── tests/                     # Testes unitários
 ```
 
 ## Internacionalização

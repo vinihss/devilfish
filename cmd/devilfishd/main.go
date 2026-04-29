@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,15 +15,13 @@ import (
 	"devilfish/internal/adapters/ai/groq"
 	"devilfish/internal/adapters/ai/openai"
 	"devilfish/internal/adapters/messaging"
-	"devilfish/internal/adapters/messaging/discord"
-	"devilfish/internal/adapters/messaging/slack"
-	"devilfish/internal/adapters/messaging/telegram"
 	"devilfish/internal/adapters/storage/memory"
 	"devilfish/internal/adapters/websocket"
 	"devilfish/internal/application/usecase"
 	"devilfish/internal/infra/config"
 	"devilfish/internal/infra/i18n"
 	"devilfish/internal/infra/logging"
+	"devilfish/internal/ports/inbound"
 	"devilfish/internal/ports/outbound"
 )
 
@@ -160,30 +159,10 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	// Messaging adapters
-	if cfg.Messaging.Telegram.Enabled {
-		telegramAdapter := telegram.NewAdapter(cfg.Messaging.Telegram, messageHandler, zerologLogger)
-		mux.HandleFunc("/webhooks/telegram", telegramAdapter.HandleWebhook)
-
-		// Start polling - runs until program exits
-		go func() {
-			telegramCtx := context.Background()
-			if err := telegramAdapter.Start(telegramCtx); err != nil {
-				logger.Error(fmt.Sprintf("telegram polling stopped: %v", err))
-			}
-		}()
-		logger.Info("Telegram polling started")
-	}
-	if cfg.Messaging.Discord.Enabled {
-		discordAdapter := discord.NewAdapter(cfg.Messaging.Discord, messageHandler, zerologLogger)
-		mux.HandleFunc("/webhooks/discord", discordAdapter.HandleWebhook)
-		logger.Info("Discord adapter ready")
-	}
-	if cfg.Messaging.Slack.Enabled {
-		slackAdapter := slack.NewAdapter(cfg.Messaging.Slack, messageHandler, zerologLogger)
-		mux.HandleFunc("/webhooks/slack", slackAdapter.HandleWebhook)
-		logger.Info("Slack adapter ready")
-	}
+	// POST /api/message — entry point for the messaging runtime (messagingd).
+	// It accepts an InboundMessage as JSON, processes it through the AI handler,
+	// and returns an OutboundMessage as JSON.
+	mux.HandleFunc("/api/message", makeMessageAPIHandler(messageHandler, cfg.Gateway.APIKey))
 
 	// Create HTTP server
 	server := &http.Server{
@@ -214,4 +193,44 @@ func main() {
 		logger.Error(fmt.Sprintf("shutdown error: %v", err))
 	}
 	logger.Info("goodbye")
+}
+
+// makeMessageAPIHandler returns an http.HandlerFunc that receives an InboundMessage
+// as JSON, processes it with the given handler, and writes back an OutboundMessage
+// as JSON. When apiKey is non-empty, the request must carry a matching
+// "Authorization: Bearer <apiKey>" header.
+func makeMessageAPIHandler(handler inbound.MessageHandler, apiKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Optional API-key authentication between runtimes.
+		if apiKey != "" {
+			auth := r.Header.Get("Authorization")
+			expected := "Bearer " + apiKey
+			if auth != expected {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		var msg inbound.InboundMessage
+		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+			http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		out, err := handler.Handle(r.Context(), &msg)
+		if err != nil {
+			http.Error(w, "internal error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(out); err != nil {
+			http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
+		}
+	}
 }

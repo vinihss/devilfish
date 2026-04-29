@@ -12,11 +12,24 @@ type Config struct {
 	Server     ServerConfig     `yaml:"server"`
 	AI         AIConfig        `yaml:"ai"`
 	Messaging  MessagingConfig `yaml:"messaging"`
+	Gateway    GatewayConfig   `yaml:"gateway"`
 	MCP        MCPConfig       `yaml:"mcp"`
 	WebSocket  WebSocketConfig `yaml:"websocket"`
 	Logging    LoggingConfig   `yaml:"logging"`
 	Security   SecurityConfig  `yaml:"security"`
 	I18n       I18nConfig     `yaml:"i18n"`
+}
+
+// GatewayConfig holds the connection settings used by the messaging runtime
+// to reach the core (devilfishd) API.
+type GatewayConfig struct {
+	// URL is the base URL of the core runtime, e.g. "http://localhost:8082".
+	URL string `yaml:"url"`
+	// APIKey is an optional shared secret sent as a Bearer token.
+	// Leave empty to disable authentication between runtimes.
+	APIKey string `yaml:"api_key"`
+	// Timeout is the HTTP request timeout in seconds (default: 30).
+	Timeout int `yaml:"timeout"`
 }
 
 // ServerConfig holds server settings
@@ -50,9 +63,20 @@ type ProviderConfig struct {
 
 // MessagingConfig holds messaging channel settings
 type MessagingConfig struct {
-	Telegram TelegramConfig `yaml:"telegram"`
-	Discord  DiscordConfig  `yaml:"discord"`
-	Slack    SlackConfig   `yaml:"slack"`
+	// Server configures the HTTP server that exposes webhook endpoints
+	// for messaging platforms (used by the messaging runtime, messagingd).
+	Server   MessagingServerConfig `yaml:"server"`
+	Telegram TelegramConfig        `yaml:"telegram"`
+	Discord  DiscordConfig         `yaml:"discord"`
+	Slack    SlackConfig           `yaml:"slack"`
+}
+
+// MessagingServerConfig holds the HTTP server settings for the messaging runtime.
+type MessagingServerConfig struct {
+	Host         string `yaml:"host"`
+	Port         int    `yaml:"port"`
+	ReadTimeout  int    `yaml:"read_timeout"`
+	WriteTimeout int    `yaml:"write_timeout"`
 }
 
 // TelegramConfig holds Telegram settings
@@ -162,9 +186,15 @@ func DefaultConfig() *Config {
 			MaxRetries:      3,
 		},
 		Messaging: MessagingConfig{
+			Server:   MessagingServerConfig{Host: "0.0.0.0", Port: 8084, ReadTimeout: 30, WriteTimeout: 30},
 			Telegram: TelegramConfig{Enabled: false, AllowList: []string{}},
 			Discord:  DiscordConfig{Enabled: false, AllowList: []string{}},
 			Slack:   SlackConfig{Enabled: false, AllowList: []string{}},
+		},
+		Gateway: GatewayConfig{
+			URL:     "http://localhost:8082",
+			APIKey:  "",
+			Timeout: 30,
 		},
 		MCP: MCPConfig{
 			Servers: []MCPServerConfig{},
