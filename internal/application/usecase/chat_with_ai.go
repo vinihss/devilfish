@@ -15,11 +15,14 @@ import (
 // ChatWithAIUseCase handles chat interactions with AI providers.
 // It manages the conversation flow between users and AI services.
 type ChatWithAIUseCase struct {
-	provider   outbound.AIProvider
-	store      outbound.SessionStore
-	logger     logging.Logger
-	translator *i18n.Translator
-	model      string // Default model from config
+	provider          outbound.AIProvider
+	store             outbound.SessionStore
+	logger            logging.Logger
+	translator        *i18n.Translator
+	model             string // Default model from config
+	assembler         *ContextAssembler
+	embeddingProvider outbound.EmbeddingProvider
+	embeddingStore    outbound.EmbeddingStore
 }
 
 // NewChatWithAIUseCase creates a new ChatWithAIUseCase instance.
@@ -45,7 +48,25 @@ func NewChatWithAIUseCase(
 		logger:     logger,
 		translator: translator,
 		model:      model,
+		assembler:  NewContextAssembler(DefaultContextAssemblerConfig()),
 	}
+}
+
+// WithEmbeddings enables hybrid context retrieval (recent + semantic memory).
+//
+// When both an EmbeddingProvider and EmbeddingStore are supplied, each user
+// message is embedded on persistence and semantic search is used to enrich the
+// context window sent to the LLM.
+func (uc *ChatWithAIUseCase) WithEmbeddings(ep outbound.EmbeddingProvider, es outbound.EmbeddingStore) *ChatWithAIUseCase {
+	uc.embeddingProvider = ep
+	uc.embeddingStore = es
+	return uc
+}
+
+// WithContextAssembler replaces the default ContextAssembler.
+func (uc *ChatWithAIUseCase) WithContextAssembler(ca *ContextAssembler) *ChatWithAIUseCase {
+	uc.assembler = ca
+	return uc
 }
 
 // ChatInput represents the input for a chat request.
@@ -120,14 +141,40 @@ func (uc *ChatWithAIUseCase) Chat(ctx context.Context, input *ChatInput) (*ChatO
 		}
 	}
 
-	// Build messages from session context
-	messages := uc.buildMessages(session, input.Message)
+	// Retrieve semantically relevant memory when hybrid retrieval is enabled.
+	var relevantMemory []*outbound.StoredEmbedding
+	if uc.embeddingProvider != nil && uc.embeddingStore != nil {
+		vec, embedErr := uc.embeddingProvider.GenerateEmbedding(ctx, input.Message)
+		if embedErr != nil {
+			uc.logger.With(map[string]interface{}{
+				"session_id": sessionID,
+				"error":      embedErr.Error(),
+			}).Warn("failed to generate embedding for retrieval; skipping vector search")
+		} else {
+			var searchErr error
+			relevantMemory, searchErr = uc.embeddingStore.SearchSimilar(ctx, sessionID.String(), vec, 5, "")
+			if searchErr != nil {
+				uc.logger.With(map[string]interface{}{
+					"session_id": sessionID,
+					"error":      searchErr.Error(),
+				}).Warn("failed to search similar embeddings; skipping vector memory")
+			}
+		}
+	}
+
+	// Build messages using the context assembler.
+	messages := uc.assembler.Build(AssembleInput{
+		SystemPrompt:   input.SystemPrompt,
+		RecentMessages: session.Context,
+		RelevantMemory: relevantMemory,
+		UserInput:      input.Message,
+	})
 
 	// Create chat request
 	req := &outbound.ChatRequest{
 		Model:        input.Model,
 		Messages:     messages,
-		SystemPrompt: input.SystemPrompt,
+		SystemPrompt: "", // already embedded by the assembler
 		Temperature:  input.Temperature,
 		MaxTokens:    input.MaxTokens,
 	}
@@ -142,12 +189,15 @@ func (uc *ChatWithAIUseCase) Chat(ctx context.Context, input *ChatInput) (*ChatO
 		return nil, fmt.Errorf("chat request failed: %w", err)
 	}
 
-	// Update session with new messages
-	session.Context = append(session.Context, outbound.Message{
+	// Persist user message in session timeline.
+	userMsg := outbound.Message{
 		Role:    "user",
 		Content: input.Message,
 		Time:    time.Now(),
-	})
+	}
+	session.Context = append(session.Context, userMsg)
+
+	// Persist assistant response.
 	session.Context = append(session.Context, outbound.Message{
 		Role:    "assistant",
 		Content: resp.Content,
@@ -162,6 +212,28 @@ func (uc *ChatWithAIUseCase) Chat(ctx context.Context, input *ChatInput) (*ChatO
 			"error":      err.Error(),
 		}).Warn("failed to save session")
 		// Continue anyway - don't fail the chat
+	}
+
+	// Persist embedding for the user message when hybrid retrieval is enabled.
+	if uc.embeddingProvider != nil && uc.embeddingStore != nil {
+		msgID := uuid.New().String()
+		vec, embedErr := uc.embeddingProvider.GenerateEmbedding(ctx, input.Message)
+		if embedErr != nil {
+			uc.logger.With(map[string]interface{}{
+				"session_id": sessionID,
+				"error":      embedErr.Error(),
+			}).Warn("failed to generate embedding for persistence; skipping")
+		} else if saveErr := uc.embeddingStore.Save(ctx, &outbound.StoredEmbedding{
+			MessageID: msgID,
+			SessionID: sessionID.String(),
+			Vector:    vec,
+			Content:   input.Message,
+		}); saveErr != nil {
+			uc.logger.With(map[string]interface{}{
+				"session_id": sessionID,
+				"error":      saveErr.Error(),
+			}).Warn("failed to persist embedding; skipping")
+		}
 	}
 
 	var inputTokens, outputTokens int
@@ -240,14 +312,33 @@ func (uc *ChatWithAIUseCase) StreamChat(ctx context.Context, input *ChatInput, o
 		}
 	}
 
-	// Build messages from session context
-	messages := uc.buildMessages(session, input.Message)
+	// Retrieve semantically relevant memory when hybrid retrieval is enabled.
+	var relevantMemory []*outbound.StoredEmbedding
+	if uc.embeddingProvider != nil && uc.embeddingStore != nil {
+		vec, embedErr := uc.embeddingProvider.GenerateEmbedding(ctx, input.Message)
+		if embedErr != nil {
+			uc.logger.With(map[string]interface{}{
+				"session_id": sessionID,
+				"error":      embedErr.Error(),
+			}).Warn("failed to generate embedding for retrieval; skipping vector search")
+		} else {
+			relevantMemory, _ = uc.embeddingStore.SearchSimilar(ctx, sessionID.String(), vec, 5, "")
+		}
+	}
+
+	// Build messages using the context assembler.
+	messages := uc.assembler.Build(AssembleInput{
+		SystemPrompt:   input.SystemPrompt,
+		RecentMessages: session.Context,
+		RelevantMemory: relevantMemory,
+		UserInput:      input.Message,
+	})
 
 	// Create chat request
 	req := &outbound.ChatRequest{
 		Model:        input.Model,
 		Messages:     messages,
-		SystemPrompt: input.SystemPrompt,
+		SystemPrompt: "", // already embedded by the assembler
 		Temperature:  input.Temperature,
 		MaxTokens:    input.MaxTokens,
 	}
@@ -262,7 +353,7 @@ func (uc *ChatWithAIUseCase) StreamChat(ctx context.Context, input *ChatInput, o
 		return fmt.Errorf("streaming chat request failed: %w", err)
 	}
 
-	// Update session
+	// Persist user message in session timeline.
 	session.Context = append(session.Context, outbound.Message{
 		Role:    "user",
 		Content: input.Message,
@@ -277,11 +368,91 @@ func (uc *ChatWithAIUseCase) StreamChat(ctx context.Context, input *ChatInput, o
 		}).Warn("failed to save session after streaming")
 	}
 
+	// Persist embedding for the user message when hybrid retrieval is enabled.
+	if uc.embeddingProvider != nil && uc.embeddingStore != nil {
+		msgID := uuid.New().String()
+		vec, embedErr := uc.embeddingProvider.GenerateEmbedding(ctx, input.Message)
+		if embedErr != nil {
+			uc.logger.With(map[string]interface{}{
+				"session_id": sessionID,
+				"error":      embedErr.Error(),
+			}).Warn("failed to generate embedding for persistence; skipping")
+		} else if saveErr := uc.embeddingStore.Save(ctx, &outbound.StoredEmbedding{
+			MessageID: msgID,
+			SessionID: sessionID.String(),
+			Vector:    vec,
+			Content:   input.Message,
+		}); saveErr != nil {
+			uc.logger.With(map[string]interface{}{
+				"session_id": sessionID,
+				"error":      saveErr.Error(),
+			}).Warn("failed to persist embedding; skipping")
+		}
+	}
+
 	uc.logger.With(map[string]interface{}{
 		"session_id": sessionID,
 	}).Info("streaming chat request completed")
 
 	return nil
+}
+
+// retrieveRelevantMemory fetches semantically similar past messages from the
+// embedding store when hybrid retrieval is enabled. Returns an empty slice when
+// the embedding provider or store is not configured, or on error.
+func (uc *ChatWithAIUseCase) retrieveRelevantMemory(ctx context.Context, sessionID uuid.UUID, text string) []*outbound.StoredEmbedding {
+	if uc.embeddingProvider == nil || uc.embeddingStore == nil {
+		return nil
+	}
+
+	vec, err := uc.embeddingProvider.GenerateEmbedding(ctx, text)
+	if err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to generate embedding for retrieval; skipping vector search")
+		return nil
+	}
+
+	results, err := uc.embeddingStore.SearchSimilar(ctx, sessionID.String(), vec, 5, "")
+	if err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to search similar embeddings; skipping vector memory")
+		return nil
+	}
+	return results
+}
+
+// persistUserEmbedding generates and stores a vector embedding for a user
+// message when hybrid retrieval is enabled. Errors are logged and never
+// propagated — failing to store an embedding must not block the chat flow.
+func (uc *ChatWithAIUseCase) persistUserEmbedding(ctx context.Context, sessionID uuid.UUID, message string) {
+	if uc.embeddingProvider == nil || uc.embeddingStore == nil {
+		return
+	}
+
+	vec, err := uc.embeddingProvider.GenerateEmbedding(ctx, message)
+	if err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to generate embedding for persistence; skipping")
+		return
+	}
+
+	if err := uc.embeddingStore.Save(ctx, &outbound.StoredEmbedding{
+		MessageID: uuid.New().String(),
+		SessionID: sessionID.String(),
+		Vector:    vec,
+		Content:   message,
+	}); err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to persist embedding; skipping")
+	}
 }
 
 // validateChatInput validates the chat input.
@@ -309,29 +480,6 @@ func (uc *ChatWithAIUseCase) validateChatInput(input *ChatInput) error {
 		input.MaxTokens = 2048 // Default max tokens
 	}
 	return nil
-}
-
-// buildMessages builds the message list from session context.
-func (uc *ChatWithAIUseCase) buildMessages(session *outbound.Session, newMessage string) []outbound.ChatMessage {
-	messages := make([]outbound.ChatMessage, 0)
-
-	// Add system prompt if present
-	if session != nil && session.Context != nil {
-		for _, msg := range session.Context {
-			messages = append(messages, outbound.ChatMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-			})
-		}
-	}
-
-	// Add new user message
-	messages = append(messages, outbound.ChatMessage{
-		Role:    "user",
-		Content: newMessage,
-	})
-
-	return messages
 }
 
 // GetProvider returns the AI provider name.
