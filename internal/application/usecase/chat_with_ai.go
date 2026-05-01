@@ -397,6 +397,64 @@ func (uc *ChatWithAIUseCase) StreamChat(ctx context.Context, input *ChatInput, o
 	return nil
 }
 
+// retrieveRelevantMemory fetches semantically similar past messages from the
+// embedding store when hybrid retrieval is enabled. Returns an empty slice when
+// the embedding provider or store is not configured, or on error.
+func (uc *ChatWithAIUseCase) retrieveRelevantMemory(ctx context.Context, sessionID uuid.UUID, text string) []*outbound.StoredEmbedding {
+	if uc.embeddingProvider == nil || uc.embeddingStore == nil {
+		return nil
+	}
+
+	vec, err := uc.embeddingProvider.GenerateEmbedding(ctx, text)
+	if err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to generate embedding for retrieval; skipping vector search")
+		return nil
+	}
+
+	results, err := uc.embeddingStore.SearchSimilar(ctx, sessionID.String(), vec, 5, "")
+	if err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to search similar embeddings; skipping vector memory")
+		return nil
+	}
+	return results
+}
+
+// persistUserEmbedding generates and stores a vector embedding for a user
+// message when hybrid retrieval is enabled. Errors are logged and never
+// propagated — failing to store an embedding must not block the chat flow.
+func (uc *ChatWithAIUseCase) persistUserEmbedding(ctx context.Context, sessionID uuid.UUID, message string) {
+	if uc.embeddingProvider == nil || uc.embeddingStore == nil {
+		return
+	}
+
+	vec, err := uc.embeddingProvider.GenerateEmbedding(ctx, message)
+	if err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to generate embedding for persistence; skipping")
+		return
+	}
+
+	if err := uc.embeddingStore.Save(ctx, &outbound.StoredEmbedding{
+		MessageID: uuid.New().String(),
+		SessionID: sessionID.String(),
+		Vector:    vec,
+		Content:   message,
+	}); err != nil {
+		uc.logger.With(map[string]interface{}{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		}).Warn("failed to persist embedding; skipping")
+	}
+}
+
 // validateChatInput validates the chat input.
 func (uc *ChatWithAIUseCase) validateChatInput(input *ChatInput) error {
 	if input == nil {
