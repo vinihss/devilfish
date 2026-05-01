@@ -151,7 +151,14 @@ func (uc *ChatWithAIUseCase) Chat(ctx context.Context, input *ChatInput) (*ChatO
 				"error":      embedErr.Error(),
 			}).Warn("failed to generate embedding for retrieval; skipping vector search")
 		} else {
-			relevantMemory, _ = uc.embeddingStore.SearchSimilar(ctx, sessionID.String(), vec, 5, "")
+			var searchErr error
+			relevantMemory, searchErr = uc.embeddingStore.SearchSimilar(ctx, sessionID.String(), vec, 5, "")
+			if searchErr != nil {
+				uc.logger.With(map[string]interface{}{
+					"session_id": sessionID,
+					"error":      searchErr.Error(),
+				}).Warn("failed to search similar embeddings; skipping vector memory")
+			}
 		}
 	}
 
@@ -209,7 +216,7 @@ func (uc *ChatWithAIUseCase) Chat(ctx context.Context, input *ChatInput) (*ChatO
 
 	// Persist embedding for the user message when hybrid retrieval is enabled.
 	if uc.embeddingProvider != nil && uc.embeddingStore != nil {
-		msgID := fmt.Sprintf("%s-%d", sessionID, len(session.Context))
+		msgID := uuid.New().String()
 		vec, embedErr := uc.embeddingProvider.GenerateEmbedding(ctx, input.Message)
 		if embedErr != nil {
 			uc.logger.With(map[string]interface{}{
@@ -363,7 +370,7 @@ func (uc *ChatWithAIUseCase) StreamChat(ctx context.Context, input *ChatInput, o
 
 	// Persist embedding for the user message when hybrid retrieval is enabled.
 	if uc.embeddingProvider != nil && uc.embeddingStore != nil {
-		msgID := fmt.Sprintf("%s-%d", sessionID, len(session.Context))
+		msgID := uuid.New().String()
 		vec, embedErr := uc.embeddingProvider.GenerateEmbedding(ctx, input.Message)
 		if embedErr != nil {
 			uc.logger.With(map[string]interface{}{

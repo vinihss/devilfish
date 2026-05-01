@@ -86,6 +86,8 @@ func (s *EmbeddingStore) DeleteBySession(_ context.Context, sessionID string) er
 	delete(s.sessionIdx, sessionID)
 
 	// Remove from the flat list.
+	// Note: reusing the underlying array keeps allocations low. For production
+	// use cases with very high session churn, consider a periodic reallocation.
 	filtered := s.embeddings[:0]
 	for _, e := range s.embeddings {
 		if e.SessionID != sessionID {

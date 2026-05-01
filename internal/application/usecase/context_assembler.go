@@ -7,10 +7,10 @@ import (
 // tokenBudget defines the fraction of the total token budget allocated to each
 // section of the composed context window.
 const (
-	systemBudgetFraction  = 0.10 // system instructions
-	memoryBudgetFraction  = 0.20 // relevant long-term memory
-	recentBudgetFraction  = 0.60 // recent conversation timeline
-	responseBudgetFraction = 0.10 // reserved for the model response
+	systemBudgetFraction   = 0.10 // system instructions
+	memoryBudgetFraction   = 0.20 // relevant long-term memory
+	recentBudgetFraction   = 0.60 // recent conversation timeline
+	responseBudgetFraction = 0.10 // reserved for the model response (not consumed by Build)
 )
 
 // ContextAssemblerConfig holds configuration for the ContextAssembler.
@@ -69,6 +69,9 @@ type AssembleInput struct {
 //  2. Relevant memory block (formatted as a single system message, if present)
 //  3. Recent conversation messages (token-aware, oldest messages dropped first)
 //  4. Current user input
+//
+// The remaining 10% of the token budget (responseBudgetFraction) is intentionally
+// left unconsumed to provide headroom for the model's response.
 func (ca *ContextAssembler) Build(input AssembleInput) []outbound.ChatMessage {
 	systemBudget := int(float64(ca.cfg.MaxTokens) * systemBudgetFraction)
 	memoryBudget := int(float64(ca.cfg.MaxTokens) * memoryBudgetFraction)
