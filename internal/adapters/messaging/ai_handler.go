@@ -4,9 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"devilfish/internal/application/usecase"
 	"devilfish/internal/ports/inbound"
 )
+
+// sessionNamespace is a fixed UUID v1 namespace (DNS namespace per RFC 4122)
+// used to derive deterministic session IDs from a user/channel pair.
+var sessionNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 // AIHandlerAdapter wraps ChatWithAIUseCase to implement inbound.MessageHandler.
 // This allows chat interactions to work through the messaging adapter interface.
@@ -35,6 +41,10 @@ func (a *AIHandlerAdapter) Handle(ctx context.Context, msg *inbound.InboundMessa
 		return nil, fmt.Errorf("message is required")
 	}
 
+	// Derive a deterministic session ID from the user+channel pair so that
+	// conversation history is preserved across messages from the same user.
+	sessionID := deriveSessionID(msg.UserID, msg.Channel)
+
 	// Get provider info for default model
 	providerInfo := a.uc.GetProviderInfo()
 	providerName := a.uc.GetProvider()
@@ -42,6 +52,7 @@ func (a *AIHandlerAdapter) Handle(ctx context.Context, msg *inbound.InboundMessa
 	// Build chat input from inbound message
 	input := &usecase.ChatInput{
 		Message:      msg.Content,
+		SessionID:    &sessionID,
 		UserID:       msg.UserID,
 		Provider:     providerName,
 		Model:        providerInfo.Model,
@@ -75,3 +86,12 @@ func (a *AIHandlerAdapter) Handle(ctx context.Context, msg *inbound.InboundMessa
 
 // Compile-time check that AIHandlerAdapter implements inbound.MessageHandler.
 var _ inbound.MessageHandler = (*AIHandlerAdapter)(nil)
+
+// deriveSessionID produces a deterministic UUID for the given userID and channel
+// combination. It encodes both components with their lengths to avoid collisions
+// between inputs such as ("us", "er:ch") and ("user", ":ch").
+func deriveSessionID(userID, channel string) uuid.UUID {
+	// Length-prefix each component to prevent ambiguous concatenations.
+	key := fmt.Sprintf("%d:%s|%d:%s", len(userID), userID, len(channel), channel)
+	return uuid.NewSHA1(sessionNamespace, []byte(key))
+}
