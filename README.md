@@ -10,7 +10,10 @@ DevilFish é um servidor em Go que atua como ponte entre múltiplos canais de me
 
 - **Multi-canal**: Telegram, Discord, Slack
 - **Multi-provider**: OpenAI, Groq, Gemini, Ollama
-- **MCP Servers**: Filesystem, GitHub, Memory (extensible)
+- **MCP Servers**: Filesystem, GitHub, Memory, **Gmail**, **Google Drive** (extensible)
+- **Skills System**: Granular skills for tool execution (send_email, list_files, read_file, etc.)
+- **Agent Safety Layer**: Execution policies (email confirmation, rate limiting, tool whitelist/blacklist)
+- **Agent Loop**: LLM-driven decision engine with step tracking and observability
 - **Gateway WebSocket**: Integração em tempo real
 - **Arquitetura modular**: Hexagonal Architecture (Ports & Adapters)
 - **Docker-ready**: Pronto para produção com multi-stage build
@@ -178,6 +181,8 @@ O DevilFish suporta conexão com servidores MCP (Model Context Protocol) para es
 | `filesystem` | stdio | read_file, write_file, list_directory, create_directory, etc. |
 | `github` | http | get_file, create_issue, search_repositories, etc. |
 | `memory` | stdio | memory_read, memory_write, memory_delete, memory_search |
+| `gmail` | stdio/http | send_email, list_emails, read_email |
+| `google-drive` | stdio/http | list_files, read_file |
 
 ### Configuração
 
@@ -212,6 +217,26 @@ mcp:
       args:
         - "-y"
         - "@modelcontextprotocol/server-memory"
+      timeout: 30
+      max_retries: 3
+
+    - name: "gmail"
+      enabled: true
+      transport: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-gmail"
+      timeout: 30
+      max_retries: 3
+
+    - name: "google-drive"
+      enabled: true
+      transport: "stdio"
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-google-drive"
       timeout: 30
       max_retries: 3
 ```
@@ -261,6 +286,90 @@ tools, err := client.ListTools(context.Background())
 result, err := client.ExecuteTool(context.Background(), "read_file", map[string]interface{}{
     "path": "/tmp file.txt",
 })
+```
+
+## Skills System
+
+O DevilFish possui um sistema de **Skills** que atua como camada de abstração entre o Agent (LLM) e os MCP servers.
+
+### Skills Disponíveis
+
+| Skill | Descrição | MCP Server |
+|------|-----------|------------|
+| `send_email` | Envia um email via Gmail | gmail |
+| `list_emails` | Lista emails no Gmail | gmail |
+| `read_email` | Lê um email específico | gmail |
+| `list_files` | Lista arquivos no Google Drive | google-drive |
+| `read_file` | Lê um arquivo do Google Drive | google-drive |
+| `get_file_info` | Obtém metadados de um arquivo | google-drive |
+
+### Uso Programático
+
+```go
+import (
+    "devilfish/internal/application/skill"
+    "devilfish/internal/adapters/mcp"
+)
+
+// Criar registro de skills
+registry := skill.NewRegistry()
+
+// Registrar skills (precisa do MCP registry)
+registry.Register(skill.NewSendEmailSkill(mcpRegistry))
+registry.Register(skill.NewListEmailsSkill(mcpRegistry))
+registry.Register(skill.NewReadEmailSkill(mcpRegistry))
+registry.Register(skill.NewListFilesSkill(mcpRegistry))
+registry.Register(skill.NewReadFileSkill(mcpRegistry))
+
+// Executar skill
+result, err := registry.ExecuteSkill(ctx, "list_files", map[string]interface{}{
+    "query": "name contains 'report'",
+})
+```
+
+## Agent Safety Layer
+
+O DevilFish inclui uma camada de **Execution Policies** para prevenir ações inseguras.
+
+### Políticas Disponíveis
+
+| Política | Descrição |
+|-----------|-----------|
+| `EmailPolicy` | Requer confirmação para envio de emails, valida destinatários |
+| `RateLimitPolicy` | Limita número de chamadas de ferramentas por janela de tempo |
+| `AllowedToolsPolicy` | Whitelist de ferramentas permitidas |
+| `BlockedToolsPolicy` | Blacklist de ferramentas bloqueadas |
+
+### Uso Programático
+
+```go
+import (
+    "devilfish/internal/application/agent"
+    "devilfish/internal/application/policy"
+)
+
+// Criar conjunto de políticas
+policies := policy.NewPolicySet()
+
+// Adicionar políticas
+policies.Add(policy.NewEmailPolicy()) // Requer confirmação para emails
+policies.Add(policy.NewRateLimitPolicy(10, time.Minute)) // Max 10 chamadas/min
+policies.Add(policy.NewAllowedToolsPolicy([]string{"list_files", "read_file"})) // Apenas estas ferramentas
+
+// Criar agente com políticas
+agent := agent.NewAgent(
+    agent.Config{
+        MaxIterations: 10,
+        Model: "gpt-4",
+    },
+    skillRegistry,
+    policies,
+    aiProvider,
+    logger,
+)
+
+// Executar
+response, err := agent.Run(ctx, "Send the file report.pdf to john@example.com")
 ```
 
 ## API

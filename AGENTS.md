@@ -38,10 +38,28 @@ devilfish/
 │   │       └── mcp_connection.go # Conexão MCP
 │   ├── application/
 │   │   ├── usecase/          # Casos de uso
+│   │   │   ├── context_assembler.go
 │   │   │   ├── handle_message.go
 │   │   │   ├── chat_with_ai.go
 │   │   │   ├── manage_session.go
 │   │   │   └── route_message.go
+│   │   ├── skill/            # Skills (camada de abstração)
+│   │   │   ├── types.go          # Skill interface, ToolCall, ToolResult
+│   │   │   ├── registry.go       # Skill registry
+│   │   │   ├── gmail_skills.go   # Gmail skills (send_email, list_emails, read_email)
+│   │   │   ├── drive_skills.go   # Drive skills (list_files, read_file)
+│   │   │   └── drive_skills_test.go
+│   │   ├── agent/            # Agent loop (LLM-driven)
+│   │   │   ├── types.go          # Step, Message, Config
+│   │   │   ├── agent.go          # Agent loop com steps, policies
+│   │   │   ├── system_prompt.go  # System prompt, tool schemas
+│   │   │   └── agent_test.go
+│   │   ├── policy/           # Execution policies (safety layer)
+│   │   │   ├── types.go          # ExecutionPolicy interface, PolicySet
+│   │   │   ├── email_policy.go   # Email safety policies
+│   │   │   ├── rate_limit_policy.go # Rate limiting
+│   │   │   ├── allowed_tools_policy.go # Whitelist/blacklist
+│   │   │   └── policy_test.go
 │   │   └── dto/              # Data Transfer Objects
 │   │       ├── message_dto.go
 │   │       └── ai_response_dto.go
@@ -52,7 +70,10 @@ devilfish/
 │   │   └── outbound/         # Interfaces de saída
 │   │       ├── ai_provider.go
 │   │       ├── message_source.go
-│   │       └── session_store.go
+│   │       ├── session_store.go
+│   │       ├── mcp_client.go      # MCPClient interface, MCPTool
+│   │       ├── email_capability.go # EmailCapability interface
+│   │       └── drive_capability.go # DriveCapability interface
 │   ├── adapters/
 │   │   ├── messaging/        # Adaptadores de mensageria
 │   │   │   ├── telegram/
@@ -79,7 +100,14 @@ devilfish/
 │   │   │   ├── registry.go        # Registro de servidores
 │   │   │   ├── stdio_transport.go # Transport stdio
 │   │   │   ├── http_transport.go  # Transport HTTP/SSE
-│   │   │   └── tool_discovery.go  # Descoberta de ferramentas
+│   │   │   ├── tool_discovery.go  # Descoberta de ferramentas
+│   │   │   ├── gmail/            # Adaptador Gmail MCP
+│   │   │   │   ├── adapter.go     # Adaptador Gmail com EmailCapability
+│   │   │   │   ├── errors.go      # Erros específicos
+│   │   │   │   └── adapter_test.go
+│   │   │   └── drive/            # Adaptador Google Drive MCP
+│   │   │       ├── adapter.go     # Adaptador Drive com DriveCapability
+│   │   │       └── adapter_test.go
 │   │   ├── websocket/
 │   │   │   └── gateway.go
 │   │   └── storage/
@@ -770,6 +798,256 @@ Antes de considerar uma tarefa completa:
 
 ---
 
+## Skills System
+
+As **Skills** formam a camada de abstração entre o Agent (LLM) e os MCP servers.
+
+### Estrutura
+
+```
+internal/application/skill/
+├── types.go           # Skill interface, ToolCall, ToolResult
+├── registry.go        # Skill registry (registro e busca)
+├── gmail_skills.go   # Gmail skills (send_email, list_emails, read_email)
+├── drive_skills.go   # Drive skills (list_files, read_file)
+└── gmail_skills_test.go
+```
+
+### Skill Interface
+
+```go
+// Skill é a interface que todas as skills devem implementar
+type Skill interface {
+    Name() string
+    Description() string
+    Schema() map[string]interface{}
+    Execute(ctx context.Context, args map[string]interface{}) (string, error)
+}
+```
+
+### Skills Disponíveis
+
+| Skill | Descrição | MCP Server | Capability |
+|-------|-----------|------------|------------|
+| `send_email` | Envia um email via Gmail | gmail | EmailCapability |
+| `list_emails` | Lista emails no Gmail | gmail | EmailCapability |
+| `read_email` | Lê um email específico | gmail | EmailCapability |
+| `list_files` | Lista arquivos no Google Drive | google-drive | DriveCapability |
+| `read_file` | Lê um arquivo do Google Drive | google-drive | DriveCapability |
+| `get_file_info` | Obtém metadados de arquivo | google-drive | DriveCapability |
+
+### Regras para Skills
+
+1. **Resolução via Registry**: Skills devem resolver o MCP via `MCPRegistry`
+2. **Assert de Capability**: Fazer type assertion para `EmailCapability` ou `DriveCapability`
+3. **Validação de Input**: Validar todos os parâmetros obrigatórios
+4. **Tratamento de Erro**: Retornar erros com `fmt.Errorf` e `%w`
+5. **Output Estruturado**: Sempre retornar string formatada e legível
+6. **Schemas JSON**: Todo skill deve ter seu `Schema()` para o LLM
+
+---
+
+## Agent Loop (LLM-Driven)
+
+O **Agent** é o motor de decisão que usa LLM para fazer escolhas e executar ferramentas.
+
+### Estrutura
+
+```
+internal/application/agent/
+├── types.go           # Step, Message, Config
+├── agent.go          # Agent loop com steps, policies
+├── system_prompt.go  # System prompt, tool schemas
+└── agent_test.go
+```
+
+### Step Tracking
+
+```go
+// Step representa um passo na execução do agent
+type Step struct {
+    Thought  string                 // Razão do LLM
+    ToolCall *ToolCall              // Ferramenta chamada (se houver)
+    Result   string                 // Resultado da execução
+    Error    error                  // Erro (se houver)
+    Duration time.Duration          // Tempo de execução
+}
+```
+
+### Agent Loop Flow
+
+```
+1. Adicionar user message ao contexto
+2. Loop até max iterations:
+   a. Chamar LLM com messages
+   b. Parsear resposta para tool calls
+   c. Para cada tool call:
+      - Aplicar ExecutionPolicy (policies.Allow())
+      - Executar skill
+      - Registrar Step
+      - Adicionar resultado como Message{Role: "tool"}
+   d. Se sem tool calls, retornar resposta
+3. Retornar resposta final ou erro
+```
+
+### System Prompt
+
+O system prompt é injetado com:
+- Regras de comportamento
+- Schemas das ferramentas disponíveis
+- Exemplos de formato de resposta (JSON)
+
+---
+
+## Execution Policy Layer (Safety Layer)
+
+As **Policies** previnem ações inseguras antes da execução.
+
+### Estrutura
+
+```
+internal/application/policy/
+├── types.go              # ExecutionPolicy interface, PolicySet
+├── email_policy.go      # Email safety policies
+├── rate_limit_policy.go  # Rate limiting
+├── allowed_tools_policy.go # Whitelist/blacklist
+└── policy_test.go
+```
+
+### ExecutionPolicy Interface
+
+```go
+// ExecutionPolicy valida se uma tool call é permitida
+type ExecutionPolicy interface {
+    Allow(call ToolCall) error  // nil = permitido, error = negado
+}
+
+// PolicySet é uma coleção de policies
+type PolicySet struct {
+    policies []ExecutionPolicy
+}
+```
+
+### Policies Disponíveis
+
+| Policy | Descrição | Configuração |
+|---------|-----------|--------------|
+| `EmailPolicy` | Requer confirmação para emails, valida destinatários | `RequireConfirmation`, `AllowedDomains`, `BlockedRecipients` |
+| `RateLimitPolicy` | Limita chamadas por janela de tempo | `MaxCalls`, `Window` |
+| `AllowedToolsPolicy` | Whitelist de ferramentas | `[]string{"send_email", "list_files"}` |
+| `BlockedToolsPolicy` | Blacklist de ferramentas | `[]string{"delete_file"}` |
+
+### Uso
+
+```go
+// Criar policy set
+ps := policy.NewPolicySet()
+
+// Adicionar policies
+ps.Add(policy.NewEmailPolicy())  // Requer confirmação para emails
+ps.Add(policy.NewRateLimitPolicy(10, time.Minute))  // Max 10/min
+ps.Add(policy.NewAllowedToolsPolicy([]string{"list_files", "read_file"}))
+
+// Verificar se tool call é permitida
+call := skill.ToolCall{
+    Name: "send_email",
+    Arguments: map[string]interface{}{
+        "to": "user@example.com",
+        "subject": "Hello",
+        "body": "World",
+        "confirmed": true,  // Necessário para EmailPolicy
+    },
+}
+err := ps.Allow(call)
+if err != nil {
+    // Tool call negada
+}
+```
+
+---
+
+## Capability Interfaces
+
+Interfaces que definem as capacidades dos MCP servers.
+
+### EmailCapability
+
+```go
+// internal/ports/outbound/email_capability.go
+type EmailCapability interface {
+    SendEmail(ctx context.Context, to, subject, body string) error
+    ListEmails(ctx context.Context, query string) ([]Email, error)
+    ReadEmail(ctx context.Context, id string) (Email, error)
+}
+```
+
+### DriveCapability
+
+```go
+// internal/ports/outbound/drive_capability.go
+type DriveCapability interface {
+    ListFiles(ctx context.Context, query string) ([]File, error)
+    ReadFile(ctx context.Context, fileID string) (string, error)
+}
+```
+
+### Implementações
+
+- `internal/adapters/mcp/gmail/adapter.go` - GmailMCP implementa EmailCapability
+- `internal/adapters/mcp/drive/adapter.go` - DriveMCP implementa DriveCapability
+
+---
+
+## Observabilidade
+
+### Step Tracking
+
+O agent registra todos os passos da execução:
+- Thought (razão do LLM)
+- Tool call (ferramenta usada)
+- Result (resultado)
+- Error (erro se houver)
+- Duration (tempo de execução)
+
+### Logging
+
+```go
+// Logs estruturados em cada etapa
+logger.With(map[string]interface{}{
+    "tool_name": tc.Name,
+    "iteration": iteration + 1,
+    "duration": time.Since(stepStart).String(),
+}).Info("tool executed successfully")
+```
+
+### Acesso aos Steps
+
+```go
+// Obter steps para observabilidade
+steps := agent.GetSteps()
+for i, step := range steps {
+    fmt.Printf("Step %d: %s\n", i+1, step.Thought)
+}
+```
+
+---
+
+## Exemplo Completo
+
+Ver `examples/agent_with_gmail_drive/main.go` para um exemplo completo e executável que demonstra:
+1. Setup de MCP registry com Gmail e Drive
+2. Registro de skills
+3. Configuração de policies (segurança)
+4. Execução do agent loop
+5. Observabilidade (steps, timing)
+
+Para executar:
+```bash
+go run ./examples/agent_with_gmail_drive/
+```
+
+---
+
 ## Regras de Documentação
 
 ### Documentação Obrigatória
@@ -844,3 +1122,9 @@ Em caso de dúvidas sobre implementação:
 | Data | Versão | Alteração |
 |------|--------|------------|
 | 2026-04-20 | 1.0.0 | Versão inicial |
+| 2026-05-02 | 1.1.0 | Gmail & Google Drive MCP integration |
+| 2026-05-02 | 1.1.0 | Skills System (send_email, list_emails, read_email, list_files, read_file) |
+| 2026-05-02 | 1.1.0 | Agent Safety Layer (ExecutionPolicy, EmailPolicy, RateLimitPolicy) |
+| 2026-05-02 | 1.1.0 | Enhanced Agent Loop (steps, max iterations, observability) |
+| 2026-05-02 | 1.1.0 | Capability interfaces (EmailCapability, DriveCapability) |
+| 2026-05-02 | 1.1.0 | Minimal working example (examples/agent_with_gmail_drive/) |
