@@ -145,6 +145,7 @@ ai:
       model: "llama-3-70b"
       api_key: ${GROQ_API_KEY}
       enabled: true
+  system_prompt: "file://prompts/agents/default_system_prompt.txt"
 
 messaging:
   telegram:
@@ -159,6 +160,11 @@ websocket:
     enabled: true
     jwt_secret: ${JWT_SECRET}
 ```
+
+`ai.system_prompt` aceita texto puro **ou** referência para arquivo:
+
+- Texto puro: `system_prompt: "Você é um assistente..."`
+- Arquivo: `system_prompt: "file://prompts/agents/default_system_prompt.txt"`
 
 ### Variáveis de ambiente obrigatórias
 

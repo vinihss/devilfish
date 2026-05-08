@@ -9,14 +9,14 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server     ServerConfig     `yaml:"server"`
-	AI         AIConfig        `yaml:"ai"`
-	Messaging  MessagingConfig `yaml:"messaging"`
-	MCP        MCPConfig       `yaml:"mcp"`
-	WebSocket  WebSocketConfig `yaml:"websocket"`
-	Logging    LoggingConfig   `yaml:"logging"`
-	Security   SecurityConfig  `yaml:"security"`
-	I18n       I18nConfig     `yaml:"i18n"`
+	Server    ServerConfig    `yaml:"server"`
+	AI        AIConfig        `yaml:"ai"`
+	Messaging MessagingConfig `yaml:"messaging"`
+	MCP       MCPConfig       `yaml:"mcp"`
+	WebSocket WebSocketConfig `yaml:"websocket"`
+	Logging   LoggingConfig   `yaml:"logging"`
+	Security  SecurityConfig  `yaml:"security"`
+	I18n      I18nConfig      `yaml:"i18n"`
 }
 
 // ServerConfig holds server settings
@@ -41,24 +41,24 @@ type AIConfig struct {
 
 // ProviderConfig holds individual provider settings
 type ProviderConfig struct {
-	Name     string `yaml:"name"`
-	Enabled  bool   `yaml:"enabled"`
-	APIKey   string `yaml:"api_key"`
-	BaseURL  string `yaml:"base_url"`
-	Model    string `yaml:"model"`
+	Name    string `yaml:"name"`
+	Enabled bool   `yaml:"enabled"`
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
+	Model   string `yaml:"model"`
 }
 
 // MessagingConfig holds messaging channel settings
 type MessagingConfig struct {
 	Telegram TelegramConfig `yaml:"telegram"`
 	Discord  DiscordConfig  `yaml:"discord"`
-	Slack    SlackConfig   `yaml:"slack"`
+	Slack    SlackConfig    `yaml:"slack"`
 }
 
 // TelegramConfig holds Telegram settings
 type TelegramConfig struct {
 	Enabled   bool     `yaml:"enabled"`
-	BotToken  string  `yaml:"bot_token"`
+	BotToken  string   `yaml:"bot_token"`
 	AllowList []string `yaml:"allow_list"`
 }
 
@@ -73,7 +73,7 @@ type DiscordConfig struct {
 type SlackConfig struct {
 	Enabled   bool     `yaml:"enabled"`
 	BotToken  string   `yaml:"bot_token"`
-	AppToken string   `yaml:"app_token"`
+	AppToken  string   `yaml:"app_token"`
 	AllowList []string `yaml:"allow_list"`
 }
 
@@ -85,14 +85,14 @@ type MCPConfig struct {
 // MCPServerConfig holds individual MCP server settings
 type MCPServerConfig struct {
 	Name       string   `yaml:"name"`
-	Enabled   bool     `yaml:"enabled"`
-	Transport string   `yaml:"transport"`
-	URL       string   `yaml:"url"`
-	Command   string   `yaml:"command"`
-	Args      []string `yaml:"args"`
-	AuthToken string   `yaml:"auth_token"`
-	Timeout   int      `yaml:"timeout"`
-	MaxRetries int    `yaml:"max_retries"`
+	Enabled    bool     `yaml:"enabled"`
+	Transport  string   `yaml:"transport"`
+	URL        string   `yaml:"url"`
+	Command    string   `yaml:"command"`
+	Args       []string `yaml:"args"`
+	AuthToken  string   `yaml:"auth_token"`
+	Timeout    int      `yaml:"timeout"`
+	MaxRetries int      `yaml:"max_retries"`
 }
 
 // WebSocketConfig holds WebSocket settings
@@ -104,12 +104,12 @@ type WebSocketConfig struct {
 // ServerSubConfig holds WebSocket server settings
 type ServerSubConfig struct {
 	Host string `yaml:"host"`
-	Port int   `yaml:"port"`
+	Port int    `yaml:"port"`
 }
 
 // AuthSubConfig holds authentication settings
 type AuthSubConfig struct {
-	Enabled    bool   `yaml:"enabled"`
+	Enabled   bool   `yaml:"enabled"`
 	JWTSecret string `yaml:"jwt_secret"`
 }
 
@@ -127,16 +127,16 @@ type SecurityConfig struct {
 
 // RateLimitConfig holds rate limiting settings
 type RateLimitConfig struct {
-	Enabled          bool `yaml:"enabled"`
+	Enabled           bool `yaml:"enabled"`
 	RequestsPerMinute int  `yaml:"requests_per_minute"`
-	Burst            int  `yaml:"burst"`
+	Burst             int  `yaml:"burst"`
 }
 
 // I18nConfig holds internationalization settings
 type I18nConfig struct {
 	DefaultLocale    string   `yaml:"default_locale"`
 	SupportedLocales []string `yaml:"supported_locales"`
-	FallbackLocale  string   `yaml:"fallback_locale"`
+	FallbackLocale   string   `yaml:"fallback_locale"`
 }
 
 // DefaultConfig returns a default configuration
@@ -164,7 +164,7 @@ func DefaultConfig() *Config {
 		Messaging: MessagingConfig{
 			Telegram: TelegramConfig{Enabled: false, AllowList: []string{}},
 			Discord:  DiscordConfig{Enabled: false, AllowList: []string{}},
-			Slack:   SlackConfig{Enabled: false, AllowList: []string{}},
+			Slack:    SlackConfig{Enabled: false, AllowList: []string{}},
 		},
 		MCP: MCPConfig{
 			Servers: []MCPServerConfig{},
@@ -180,7 +180,7 @@ func DefaultConfig() *Config {
 		I18n: I18nConfig{
 			DefaultLocale:    "en",
 			SupportedLocales: []string{"en", "pt", "es"},
-			FallbackLocale:  "en",
+			FallbackLocale:   "en",
 		},
 	}
 }

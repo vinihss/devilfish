@@ -47,6 +47,10 @@ func (l *Loader) Load() (*Config, error) {
 			return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
 		}
 
+		if err := resolveSystemPromptInMap(cfg, filepath.Dir(path)); err != nil {
+			return nil, fmt.Errorf("failed to process config file %s: %w", path, err)
+		}
+
 		// Merge configurations
 		merged = mergeConfigs(merged, cfg)
 	}
@@ -105,6 +109,66 @@ func resolveEnvVars(content string) string {
 		// Return empty string if no value found
 		return ""
 	})
+}
+
+// resolveSystemPromptReference resolves ai.system_prompt when it references a file.
+// Supported formats are "file://<path>" and "@<path>".
+func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) {
+	value := strings.TrimSpace(systemPrompt)
+	if value == "" {
+		return value, nil
+	}
+
+	var filePath string
+	if path, ok := strings.CutPrefix(value, "file://"); ok {
+		filePath = path
+	} else if path, ok := strings.CutPrefix(value, "@"); ok {
+		filePath = path
+	} else {
+		return systemPrompt, nil
+	}
+
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(baseDir, filePath)
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read system prompt file %s: %w", filePath, err)
+	}
+
+	return string(data), nil
+}
+
+// resolveSystemPromptInMap resolves ai.system_prompt in a raw YAML map before merge.
+func resolveSystemPromptInMap(cfg map[string]interface{}, baseDir string) error {
+	aiRaw, ok := cfg["ai"]
+	if !ok {
+		return nil
+	}
+
+	ai, ok := aiRaw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	systemPromptRaw, ok := ai["system_prompt"]
+	if !ok {
+		return nil
+	}
+
+	systemPrompt, ok := systemPromptRaw.(string)
+	if !ok {
+		return nil
+	}
+
+	resolved, err := resolveSystemPromptReference(systemPrompt, baseDir)
+	if err != nil {
+		return err
+	}
+
+	ai["system_prompt"] = resolved
+	return nil
 }
 
 // mergeConfigs merges two configuration maps.
