@@ -33,13 +33,11 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Load and merge all config files
 	var merged map[string]interface{}
-	configBaseDir := "."
 	for _, path := range l.configPaths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
 		}
-		configBaseDir = filepath.Dir(path)
 
 		// Resolve environment variables in YAML content
 		content := resolveEnvVars(string(data))
@@ -47,6 +45,10 @@ func (l *Loader) Load() (*Config, error) {
 		var cfg map[string]interface{}
 		if err := yaml.Unmarshal([]byte(content), &cfg); err != nil {
 			return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
+		}
+
+		if err := resolveSystemPromptInMap(cfg, filepath.Dir(path)); err != nil {
+			return nil, fmt.Errorf("failed to process config file %s: %w", path, err)
 		}
 
 		// Merge configurations
@@ -63,12 +65,6 @@ func (l *Loader) Load() (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-
-	systemPrompt, err := resolveSystemPromptReference(cfg.AI.SystemPrompt, configBaseDir)
-	if err != nil {
-		return nil, err
-	}
-	cfg.AI.SystemPrompt = systemPrompt
 
 	// Validate the configuration
 	if err := cfg.Validate(); err != nil {
@@ -145,6 +141,36 @@ func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) 
 	}
 
 	return string(data), nil
+}
+
+func resolveSystemPromptInMap(cfg map[string]interface{}, baseDir string) error {
+	aiRaw, ok := cfg["ai"]
+	if !ok {
+		return nil
+	}
+
+	ai, ok := aiRaw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	systemPromptRaw, ok := ai["system_prompt"]
+	if !ok {
+		return nil
+	}
+
+	systemPrompt, ok := systemPromptRaw.(string)
+	if !ok {
+		return nil
+	}
+
+	resolved, err := resolveSystemPromptReference(systemPrompt, baseDir)
+	if err != nil {
+		return err
+	}
+
+	ai["system_prompt"] = resolved
+	return nil
 }
 
 // mergeConfigs merges two configuration maps.
