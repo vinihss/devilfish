@@ -33,11 +33,13 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Load and merge all config files
 	var merged map[string]interface{}
+	lastConfigDir := "."
 	for _, path := range l.configPaths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
 		}
+		lastConfigDir = filepath.Dir(path)
 
 		// Resolve environment variables in YAML content
 		content := resolveEnvVars(string(data))
@@ -61,6 +63,12 @@ func (l *Loader) Load() (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+
+	systemPrompt, err := resolveSystemPromptReference(cfg.AI.SystemPrompt, lastConfigDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg.AI.SystemPrompt = systemPrompt
 
 	// Validate the configuration
 	if err := cfg.Validate(); err != nil {
@@ -105,6 +113,38 @@ func resolveEnvVars(content string) string {
 		// Return empty string if no value found
 		return ""
 	})
+}
+
+func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) {
+	value := strings.TrimSpace(systemPrompt)
+	if value == "" {
+		return systemPrompt, nil
+	}
+
+	var filePath string
+	switch {
+	case strings.HasPrefix(value, "file://"):
+		filePath = strings.TrimPrefix(value, "file://")
+	case strings.HasPrefix(value, "@"):
+		filePath = strings.TrimPrefix(value, "@")
+	default:
+		return systemPrompt, nil
+	}
+
+	if filePath == "" {
+		return "", fmt.Errorf("invalid system prompt file reference: %q", systemPrompt)
+	}
+
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(baseDir, filePath)
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read system prompt file %s: %w", filePath, err)
+	}
+
+	return string(data), nil
 }
 
 // mergeConfigs merges two configuration maps.
