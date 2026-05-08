@@ -33,13 +33,13 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Load and merge all config files
 	var merged map[string]interface{}
-	lastConfigDir := "."
+	configBaseDir := "."
 	for _, path := range l.configPaths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
 		}
-		lastConfigDir = filepath.Dir(path)
+		configBaseDir = filepath.Dir(path)
 
 		// Resolve environment variables in YAML content
 		content := resolveEnvVars(string(data))
@@ -64,7 +64,7 @@ func (l *Loader) Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	systemPrompt, err := resolveSystemPromptReference(cfg.AI.SystemPrompt, lastConfigDir)
+	systemPrompt, err := resolveSystemPromptReference(cfg.AI.SystemPrompt, configBaseDir)
 	if err != nil {
 		return nil, err
 	}
