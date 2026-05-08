@@ -111,10 +111,12 @@ func resolveEnvVars(content string) string {
 	})
 }
 
+// resolveSystemPromptReference resolves ai.system_prompt when it references a file.
+// Supported formats are "file://<path>" and "@<path>".
 func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) {
 	value := strings.TrimSpace(systemPrompt)
 	if value == "" {
-		return systemPrompt, nil
+		return value, nil
 	}
 
 	var filePath string
@@ -138,6 +140,7 @@ func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) 
 	return string(data), nil
 }
 
+// resolveSystemPromptInMap resolves ai.system_prompt in a raw YAML map before merge.
 func resolveSystemPromptInMap(cfg map[string]interface{}, baseDir string) error {
 	aiRaw, ok := cfg["ai"]
 	if !ok {
