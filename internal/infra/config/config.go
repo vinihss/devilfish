@@ -34,7 +34,6 @@ type AIConfig struct {
 	DefaultProvider string           `yaml:"default_provider"`
 	// SystemPrompt is the system-level instruction sent to the AI on every request,
 	// defining the agent's persona, language, and behavior.
-	// It accepts plain text or file references (file://relative/or/absolute/path).
 	SystemPrompt string `yaml:"system_prompt"`
 	Timeout      int    `yaml:"timeout"`
 	MaxRetries   int    `yaml:"max_retries"`

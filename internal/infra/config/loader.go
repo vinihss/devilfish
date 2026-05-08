@@ -126,10 +126,6 @@ func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) 
 		return systemPrompt, nil
 	}
 
-	if strings.TrimSpace(filePath) == "" {
-		return "", fmt.Errorf("invalid system prompt file reference: %q", systemPrompt)
-	}
-
 	if !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(baseDir, filePath)
 	}
