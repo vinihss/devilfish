@@ -118,16 +118,15 @@ func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) 
 	}
 
 	var filePath string
-	switch {
-	case strings.HasPrefix(value, "file://"):
-		filePath = strings.TrimPrefix(value, "file://")
-	case strings.HasPrefix(value, "@"):
-		filePath = strings.TrimPrefix(value, "@")
-	default:
+	if path, ok := strings.CutPrefix(value, "file://"); ok {
+		filePath = path
+	} else if path, ok := strings.CutPrefix(value, "@"); ok {
+		filePath = path
+	} else {
 		return systemPrompt, nil
 	}
 
-	if filePath == "" {
+	if strings.TrimSpace(filePath) == "" {
 		return "", fmt.Errorf("invalid system prompt file reference: %q", systemPrompt)
 	}
 

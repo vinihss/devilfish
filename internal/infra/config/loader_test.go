@@ -33,7 +33,7 @@ func TestLoadFromFile_WithFileSystemPrompt_LoadsPromptFromFile(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	promptDir := filepath.Join(tmpDir, "prompts", "agents")
 	promptPath := filepath.Join(promptDir, "default.txt")
-	promptText := "Você é um assistente de conversação em português brasileiro.\n"
+	promptText := "test prompt loaded from file\n"
 
 	if err := os.MkdirAll(promptDir, 0o755); err != nil {
 		t.Fatalf("failed to create prompt dir: %v", err)
