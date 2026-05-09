@@ -145,7 +145,8 @@ ai:
       model: "llama-3-70b"
       api_key: ${GROQ_API_KEY}
       enabled: true
-  system_prompt: "file://prompts/agents/default_system_prompt.txt"
+  system_prompt: "file://prompts/agents/default_system_prompt.md"
+  tools_file: "file://prompts/tools/bash_tools.md"
 
 messaging:
   telegram:
@@ -164,7 +165,16 @@ websocket:
 `ai.system_prompt` aceita texto puro **ou** referência para arquivo:
 
 - Texto puro: `system_prompt: "Você é um assistente..."`
-- Arquivo: `system_prompt: "file://prompts/agents/default_system_prompt.txt"`
+- Arquivo: `system_prompt: "file://prompts/agents/default_system_prompt.md"`
+
+Quando `system_prompt` aponta para `.md`, o loader também resolve links locais de arquivo no markdown e incorpora o conteúdo referenciado no prompt final.
+
+`ai.tools_file` permite carregar ferramentas (incluindo tool de bash) definidas em YAML/JSON ou Markdown com bloco cercado por ```yaml/```json:
+
+```yaml
+ai:
+  tools_file: "file://prompts/tools/bash_tools.md"
+```
 
 ### Variáveis de ambiente obrigatórias
 
@@ -308,6 +318,7 @@ O DevilFish possui um sistema de **Skills** que atua como camada de abstração 
 | `list_files` | Lista arquivos no Google Drive | google-drive |
 | `read_file` | Lê um arquivo do Google Drive | google-drive |
 | `get_file_info` | Obtém metadados de um arquivo | google-drive |
+| `run_bash` | Executa comandos bash permitidos (carregado via `ai.tools_file`) | local |
 
 ### Uso Programático
 

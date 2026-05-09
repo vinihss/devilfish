@@ -12,6 +12,7 @@ import (
 
 // Environment variable pattern: ${VAR} or ${VAR:-default}
 var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}`)
+var markdownLinkPattern = regexp.MustCompile(`\[[^\]]+\]\(([^)]+)\)`)
 
 // Loader handles loading configuration from YAML files and environment variables.
 type Loader struct {
@@ -47,7 +48,7 @@ func (l *Loader) Load() (*Config, error) {
 			return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
 		}
 
-		if err := resolveSystemPromptInMap(cfg, filepath.Dir(path)); err != nil {
+		if err := resolveAIReferencesInMap(cfg, filepath.Dir(path)); err != nil {
 			return nil, fmt.Errorf("failed to process config file %s: %w", path, err)
 		}
 
@@ -119,29 +120,167 @@ func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) 
 		return value, nil
 	}
 
-	var filePath string
-	if path, ok := strings.CutPrefix(value, "file://"); ok {
-		filePath = path
-	} else if path, ok := strings.CutPrefix(value, "@"); ok {
-		filePath = path
-	} else {
+	filePath, isReference := normalizeFileReference(value)
+	if !isReference {
 		return systemPrompt, nil
 	}
 
 	if !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(baseDir, filePath)
 	}
+	filePath = filepath.Clean(filePath)
+
+	return resolvePromptFile(filePath, []string{}, map[string]int{})
+}
+
+func resolvePromptFile(filePath string, stack []string, visiting map[string]int) (string, error) {
+	if idx, exists := visiting[filePath]; exists {
+		chain := append(append([]string{}, stack[idx:]...), filePath)
+		return "", fmt.Errorf("circular system prompt file reference detected: %s", strings.Join(chain, " -> "))
+	}
+
+	visiting[filePath] = len(stack)
+	stack = append(stack, filePath)
+	defer delete(visiting, filePath)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read system prompt file %s: %w", filePath, err)
 	}
 
-	return string(data), nil
+	content := string(data)
+	if !isMarkdownFile(filePath) {
+		return content, nil
+	}
+
+	return resolveMarkdownLinks(content, filepath.Dir(filePath), stack, visiting)
 }
 
-// resolveSystemPromptInMap resolves ai.system_prompt in a raw YAML map before merge.
-func resolveSystemPromptInMap(cfg map[string]interface{}, baseDir string) error {
+func resolveMarkdownLinks(content, currentDir string, stack []string, visiting map[string]int) (string, error) {
+	matches := markdownLinkPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content, nil
+	}
+
+	seen := make(map[string]struct{})
+	blocks := make([]string, 0, len(matches))
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		target := normalizeMarkdownLinkTarget(match[1])
+		if target == "" || isExternalLink(target) {
+			continue
+		}
+
+		targetPath := target
+		if !filepath.IsAbs(targetPath) {
+			targetPath = filepath.Join(currentDir, targetPath)
+		}
+		targetPath = filepath.Clean(targetPath)
+
+		if _, exists := seen[targetPath]; exists {
+			continue
+		}
+		seen[targetPath] = struct{}{}
+
+		refContent, err := resolvePromptFile(targetPath, stack, visiting)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve markdown link %q: %w", target, err)
+		}
+
+		blocks = append(blocks, fmt.Sprintf("### Referenced file: %s\n%s", target, refContent))
+	}
+
+	if len(blocks) == 0 {
+		return content, nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(content)
+	sb.WriteString("\n\n---\nResolved markdown references:\n\n")
+	sb.WriteString(strings.Join(blocks, "\n\n"))
+	return sb.String(), nil
+}
+
+func normalizeFileReference(value string) (string, bool) {
+	if path, ok := strings.CutPrefix(value, "file://"); ok {
+		return path, true
+	}
+	if path, ok := strings.CutPrefix(value, "@"); ok {
+		return path, true
+	}
+	return value, false
+}
+
+func normalizeMarkdownLinkTarget(target string) string {
+	value := strings.TrimSpace(target)
+	if value == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(value, "<") && strings.HasSuffix(value, ">") {
+		value = strings.TrimPrefix(strings.TrimSuffix(value, ">"), "<")
+	}
+
+	if idx := strings.IndexAny(value, " \t"); idx >= 0 {
+		value = value[:idx]
+	}
+
+	if idx := strings.Index(value, "#"); idx >= 0 {
+		value = value[:idx]
+	}
+
+	return value
+}
+
+func isExternalLink(target string) bool {
+	lowered := strings.ToLower(strings.TrimSpace(target))
+	return lowered == "" ||
+		strings.HasPrefix(lowered, "#") ||
+		strings.HasPrefix(lowered, "http://") ||
+		strings.HasPrefix(lowered, "https://") ||
+		strings.HasPrefix(lowered, "mailto:") ||
+		strings.HasPrefix(lowered, "tel:") ||
+		strings.Contains(lowered, "://")
+}
+
+func isMarkdownFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".md" || ext == ".markdown"
+}
+
+func resolveToolsFileReference(toolsFile, baseDir string) (string, error) {
+	value := strings.TrimSpace(toolsFile)
+	if value == "" {
+		return "", nil
+	}
+
+	path, isReference := normalizeFileReference(value)
+	if !isReference {
+		path = value
+	}
+
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(baseDir, path)
+	}
+	path = filepath.Clean(path)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read tools file %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("tools file path points to a directory: %s", path)
+	}
+
+	return path, nil
+}
+
+// resolveAIReferencesInMap resolves ai.system_prompt and ai.tools_file in a raw YAML map before merge.
+func resolveAIReferencesInMap(cfg map[string]interface{}, baseDir string) error {
 	aiRaw, ok := cfg["ai"]
 	if !ok {
 		return nil
@@ -153,22 +292,35 @@ func resolveSystemPromptInMap(cfg map[string]interface{}, baseDir string) error 
 	}
 
 	systemPromptRaw, ok := ai["system_prompt"]
-	if !ok {
-		return nil
+	if ok {
+		systemPrompt, ok := systemPromptRaw.(string)
+		if ok {
+			resolved, err := resolveSystemPromptReference(systemPrompt, baseDir)
+			if err != nil {
+				return err
+			}
+			ai["system_prompt"] = resolved
+		}
 	}
 
-	systemPrompt, ok := systemPromptRaw.(string)
-	if !ok {
-		return nil
+	toolsFileRaw, ok := ai["tools_file"]
+	if ok {
+		toolsFile, ok := toolsFileRaw.(string)
+		if ok {
+			resolvedPath, err := resolveToolsFileReference(toolsFile, baseDir)
+			if err != nil {
+				return err
+			}
+			ai["tools_file"] = resolvedPath
+		}
 	}
 
-	resolved, err := resolveSystemPromptReference(systemPrompt, baseDir)
-	if err != nil {
-		return err
-	}
-
-	ai["system_prompt"] = resolved
 	return nil
+}
+
+// resolveSystemPromptInMap resolves ai.system_prompt in a raw YAML map before merge.
+func resolveSystemPromptInMap(cfg map[string]interface{}, baseDir string) error {
+	return resolveAIReferencesInMap(cfg, baseDir)
 }
 
 // mergeConfigs merges two configuration maps.

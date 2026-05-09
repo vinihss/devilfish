@@ -48,6 +48,7 @@ devilfish/
 │   │   │   ├── registry.go       # Skill registry
 │   │   │   ├── gmail_skills.go   # Gmail skills (send_email, list_emails, read_email)
 │   │   │   ├── drive_skills.go   # Drive skills (list_files, read_file)
+│   │   │   ├── file_tools.go     # Tools carregadas de arquivo (inclui bash)
 │   │   │   └── drive_skills_test.go
 │   │   ├── agent/            # Agent loop (LLM-driven)
 │   │   │   ├── types.go          # Step, Message, Config
@@ -810,6 +811,7 @@ internal/application/skill/
 ├── registry.go        # Skill registry (registro e busca)
 ├── gmail_skills.go   # Gmail skills (send_email, list_emails, read_email)
 ├── drive_skills.go   # Drive skills (list_files, read_file)
+├── file_tools.go     # File-based tools (yaml/json/markdown)
 └── gmail_skills_test.go
 ```
 
@@ -835,6 +837,7 @@ type Skill interface {
 | `list_files` | Lista arquivos no Google Drive | google-drive | DriveCapability |
 | `read_file` | Lê um arquivo do Google Drive | google-drive | DriveCapability |
 | `get_file_info` | Obtém metadados de arquivo | google-drive | DriveCapability |
+| `run_bash` | Executa comandos bash permitidos carregados via arquivo | local | N/A |
 
 ### Regras para Skills
 
@@ -1128,3 +1131,4 @@ Em caso de dúvidas sobre implementação:
 | 2026-05-02 | 1.1.0 | Enhanced Agent Loop (steps, max iterations, observability) |
 | 2026-05-02 | 1.1.0 | Capability interfaces (EmailCapability, DriveCapability) |
 | 2026-05-02 | 1.1.0 | Minimal working example (examples/agent_with_gmail_drive/) |
+| 2026-05-09 | 1.2.0 | Markdown system prompt com resolução de links locais e tools file-based (bash) |
