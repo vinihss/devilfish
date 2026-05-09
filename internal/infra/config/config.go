@@ -35,8 +35,10 @@ type AIConfig struct {
 	// SystemPrompt is the system-level instruction sent to the AI on every request,
 	// defining the agent's persona, language, and behavior.
 	SystemPrompt string `yaml:"system_prompt"`
-	Timeout      int    `yaml:"timeout"`
-	MaxRetries   int    `yaml:"max_retries"`
+	// ToolsFile points to a YAML/JSON/Markdown file with tool definitions.
+	ToolsFile  string `yaml:"tools_file"`
+	Timeout    int    `yaml:"timeout"`
+	MaxRetries int    `yaml:"max_retries"`
 }
 
 // ProviderConfig holds individual provider settings

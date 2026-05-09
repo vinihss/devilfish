@@ -35,7 +35,8 @@ ai:
       model: "llama3.2"
 
   default_provider: "groq"
-  system_prompt: "file://prompts/agents/default_system_prompt.txt"
+  system_prompt: "file://prompts/agents/default_system_prompt.md"
+  tools_file: "file://prompts/tools/bash_tools.md"
   timeout: 30
   max_retries: 3
 
