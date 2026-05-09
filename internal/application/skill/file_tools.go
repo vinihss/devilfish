@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -121,7 +122,7 @@ type BashCommandSkill struct {
 func NewBashCommandSkill(def ToolDefinition) (*BashCommandSkill, error) {
 	name := strings.TrimSpace(def.Name)
 	if name == "" {
-		name = "run_bash"
+		return nil, fmt.Errorf("bash tool name is required")
 	}
 
 	description := strings.TrimSpace(def.Description)
@@ -221,7 +222,7 @@ func (s *BashCommandSkill) Execute(ctx context.Context, args map[string]interfac
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(execCtx, "bash", "-lc", command)
+	cmd := exec.CommandContext(execCtx, parts[0], parts[1:]...)
 	if s.workingDir != "" {
 		cmd.Dir = s.workingDir
 	}
@@ -229,7 +230,7 @@ func (s *BashCommandSkill) Execute(ctx context.Context, args map[string]interfac
 	output, err := cmd.CombinedOutput()
 	outputText := string(output)
 	if len(outputText) > s.maxOutputBytes {
-		outputText = outputText[:s.maxOutputBytes] + "\n... output truncated ..."
+		outputText = truncateUTF8(outputText, s.maxOutputBytes) + "\n... output truncated ..."
 	}
 
 	if execCtx.Err() == context.DeadlineExceeded {
@@ -245,7 +246,7 @@ func (s *BashCommandSkill) Execute(ctx context.Context, args map[string]interfac
 }
 
 func containsUnsafeShellChars(command string) bool {
-	return strings.ContainsAny(command, ";&|><$`\n\r")
+	return strings.ContainsAny(command, ";&|><$`\n\r(){}")
 }
 
 func toPositiveInt(value interface{}) (int, bool) {
@@ -259,6 +260,18 @@ func toPositiveInt(value interface{}) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func truncateUTF8(text string, maxBytes int) string {
+	if maxBytes <= 0 || len(text) <= maxBytes {
+		return text
+	}
+
+	truncated := text[:maxBytes]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated
 }
 
 var _ Skill = (*BashCommandSkill)(nil)

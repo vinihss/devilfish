@@ -130,14 +130,17 @@ func resolveSystemPromptReference(systemPrompt, baseDir string) (string, error) 
 	}
 	filePath = filepath.Clean(filePath)
 
-	return resolvePromptFile(filePath, map[string]bool{})
+	return resolvePromptFile(filePath, []string{}, map[string]int{})
 }
 
-func resolvePromptFile(filePath string, visiting map[string]bool) (string, error) {
-	if visiting[filePath] {
-		return "", fmt.Errorf("circular system prompt file reference detected: %s", filePath)
+func resolvePromptFile(filePath string, stack []string, visiting map[string]int) (string, error) {
+	if idx, exists := visiting[filePath]; exists {
+		chain := append(append([]string{}, stack[idx:]...), filePath)
+		return "", fmt.Errorf("circular system prompt file reference detected: %s", strings.Join(chain, " -> "))
 	}
-	visiting[filePath] = true
+
+	visiting[filePath] = len(stack)
+	stack = append(stack, filePath)
 	defer delete(visiting, filePath)
 
 	data, err := os.ReadFile(filePath)
@@ -150,10 +153,10 @@ func resolvePromptFile(filePath string, visiting map[string]bool) (string, error
 		return content, nil
 	}
 
-	return resolveMarkdownLinks(content, filepath.Dir(filePath), visiting)
+	return resolveMarkdownLinks(content, filepath.Dir(filePath), stack, visiting)
 }
 
-func resolveMarkdownLinks(content, currentDir string, visiting map[string]bool) (string, error) {
+func resolveMarkdownLinks(content, currentDir string, stack []string, visiting map[string]int) (string, error) {
 	matches := markdownLinkPattern.FindAllStringSubmatch(content, -1)
 	if len(matches) == 0 {
 		return content, nil
@@ -183,7 +186,7 @@ func resolveMarkdownLinks(content, currentDir string, visiting map[string]bool) 
 		}
 		seen[targetPath] = struct{}{}
 
-		refContent, err := resolvePromptFile(targetPath, visiting)
+		refContent, err := resolvePromptFile(targetPath, stack, visiting)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve markdown link %q: %w", target, err)
 		}
