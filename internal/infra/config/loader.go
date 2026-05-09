@@ -233,7 +233,7 @@ func normalizeMarkdownLinkTarget(target string) string {
 		value = value[:idx]
 	}
 
-	return strings.TrimSpace(value)
+	return value
 }
 
 func isExternalLink(target string) bool {
